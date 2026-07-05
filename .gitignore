@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.db
+*.log
+.env
+backend/app/__pycache__/
+backend/app/**/__pycache__/
+*.html
+debug_*.json
+carrefour_api.json

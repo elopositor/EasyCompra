@@ -1,0 +1,46 @@
+name: Sync Carrefour & Lidl
+
+on:
+  schedule:
+    # 8:00 AM hora España (UTC+2 verano, UTC+1 invierno)
+    # Usamos 06:00 UTC para cubrir el horario de verano
+    - cron: '0 6 * * *'
+  workflow_dispatch:  # Permite ejecutar manualmente desde GitHub
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Necesario para hacer commit de los JSON
+
+    steps:
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Instalar dependencias
+        run: |
+          pip install playwright==1.48.0 camoufox[geoip] httpx sqlalchemy fastapi
+          playwright install chromium
+          python -m camoufox fetch
+
+      - name: Sincronizar Carrefour y Lidl
+        run: |
+          cd backend
+          python -m app.sync_to_json
+        timeout-minutes: 30
+
+      - name: Guardar datos actualizados en el repositorio
+        run: |
+          git config user.name  "EasyCompra Bot"
+          git config user.email "bot@easycompra.local"
+          git add backend/data/carrefour.json backend/data/lidl.json
+          git diff --staged --quiet && echo "Sin cambios" || (
+            git commit -m "sync: datos $(date +'%Y-%m-%d %H:%M') UTC"
+            git push
+          )
