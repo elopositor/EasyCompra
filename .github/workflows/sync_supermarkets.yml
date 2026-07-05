@@ -1,4 +1,4 @@
-name: Sync Carrefour & Lidl
+name: "Sync Carrefour and Lidl"
 
 on:
   schedule:
