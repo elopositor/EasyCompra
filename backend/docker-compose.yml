@@ -1,0 +1,27 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8123:8123"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DB_PATH=sqlite:////app/data/easycompra.db
+    restart: unless-stopped
+
+  cron:
+    build: .
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DB_PATH=sqlite:////app/data/easycompra.db
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "pip install -q playwright && playwright install chromium &&
+       while true; do
+         echo '[cron] Iniciando sync completo...';
+         python -m app.sync;
+         echo '[cron] Sync terminado. Próximo en 24h.';
+         sleep 86400;
+       done"
+    restart: unless-stopped
