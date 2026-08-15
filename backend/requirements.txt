@@ -3,3 +3,4 @@ uvicorn[standard]==0.30.6
 httpx==0.27.2
 sqlalchemy==2.0.35
 playwright==1.48.0
+camoufox[geoip]==0.5.4

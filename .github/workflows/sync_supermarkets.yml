@@ -1,4 +1,4 @@
-name: "Sync Carrefour and Lidl"
+name: "Sync supermercados"
 
 on:
   schedule:
@@ -25,21 +25,21 @@ jobs:
 
       - name: Instalar dependencias
         run: |
-          pip install playwright==1.48.0 camoufox[geoip] httpx sqlalchemy fastapi
+          pip install -r backend/requirements.txt
           playwright install chromium
           python -m camoufox fetch
 
-      - name: Sincronizar Carrefour y Lidl
+      - name: Sincronizar Carrefour, Lidl, Mercadona y Dia
         run: |
           cd backend
           python -m app.sync_to_json
-        timeout-minutes: 30
+        timeout-minutes: 45
 
       - name: Guardar datos actualizados en el repositorio
         run: |
           git config user.name  "EasyCompra Bot"
           git config user.email "bot@easycompra.local"
-          git add backend/data/carrefour.json backend/data/lidl.json
+          git add backend/data/
           git diff --staged --quiet && echo "Sin cambios" || (
             git commit -m "sync: datos $(date +'%Y-%m-%d %H:%M') UTC"
             git push
