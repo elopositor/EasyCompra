@@ -28,7 +28,6 @@ class Product(Base):
     ingredients: Mapped[str | None]
     allergens: Mapped[str | None]
     contains_nata: Mapped[bool] = mapped_column(default=False)
-    nutriscore_grade: Mapped[str | None]
     energy_kcal_100g: Mapped[float | None]
     fat_100g: Mapped[float | None]
     saturated_fat_100g: Mapped[float | None]
@@ -44,13 +43,20 @@ def init_db() -> None:
     Base.metadata.create_all(engine)
 
 
+# Las fuentes traen claves que no son columnas (p. ej. "id": "mercadona_123",
+# usada para deduplicar en los JSON). Nunca deben llegar al modelo: "id" es la
+# clave primaria entera de la tabla.
+_COLUMNS = {c.name for c in Product.__table__.columns} - {"id"}
+
+
 def upsert_product(session: Session, product: dict) -> None:
     existing = (
         session.query(Product)
         .filter_by(supermarket=product["supermarket"], external_id=product["external_id"])
         .one_or_none()
     )
-    product = {**product, "updated_at": datetime.now(timezone.utc)}
+    product = {k: v for k, v in product.items() if k in _COLUMNS}
+    product["updated_at"] = datetime.now(timezone.utc)
     if existing:
         for key, value in product.items():
             setattr(existing, key, value)

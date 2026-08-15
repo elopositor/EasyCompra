@@ -14,7 +14,7 @@ app = FastAPI(title="EasyCompra API")
 DATA_DIR = Path(__file__).parent.parent / "data"
 
 # Supermercados servidos desde JSON (actualizado por GitHub Actions)
-JSON_SUPERMARKETS = {"Carrefour", "Lidl"}
+JSON_SUPERMARKETS = {"Carrefour", "Lidl", "Mercadona", "Dia"}
 
 
 def _load_json_products(supermarket: str) -> list[dict]:
@@ -74,11 +74,16 @@ def list_products(
 def health():
     with Session(engine) as session:
         total = session.query(Product).count()
-        counts = {
+        db_counts = {
             sm: session.query(Product).filter_by(supermarket=sm).count()
-            for sm in ["Mercadona", "Dia", "Lidl"]
+            for sm in sorted(JSON_SUPERMARKETS)
         }
-    return {"status": "ok", "total_products": total, "by_supermarket": counts}
+    return {
+        "status": "ok",
+        "total_products": total,
+        "by_supermarket": db_counts,
+        "json_products": {sm: len(_load_json_products(sm)) for sm in sorted(JSON_SUPERMARKETS)},
+    }
 
 
 # ── Sync endpoints ─────────────────────────────────────────────────────────

@@ -52,7 +52,6 @@ def _parse_html(html: str) -> list[dict]:
             "ingredients": None,
             "allergens": None,
             "contains_nata": False,
-            "nutriscore_grade": None,
             "energy_kcal_100g": None,
             "fat_100g": None,
             "saturated_fat_100g": None,

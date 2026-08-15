@@ -3,8 +3,33 @@ import time
 
 from . import dia_client, mercadona_client, openfoodfacts_client
 
+# IDs de subcategoria de Mercadona (el endpoint /api/categories/{id}/ solo
+# acepta subcategorias; los IDs de primer nivel devuelven 404).
+# Seleccion equivalente a FOOD_QUERIES: lacteos, cereales, proteina y conservas.
+MERCADONA_CATEGORIES = [
+    103,  # Yogures desnatados
+    104,  # Yogures naturales y sabores
+    105,  # Bifidus
+    108,  # Yogures liquidos
+    109,  # Yogures griegos
+    72,   # Leche y bebidas vegetales
+    77,   # Huevos
+    75,   # Mantequilla y margarina
+    53,   # Queso untable, fresco y especialidades
+    54,   # Queso curado, semicurado y tierno
+    56,   # Queso lonchas, rallado y en porciones
+    78,   # Cereales
+    118,  # Arroz
+    120,  # Pasta y fideos
+    121,  # Legumbres
+    122,  # Atun y otras conservas de pescado
+    133,  # Frutos secos y fruta desecada
+    43,   # Embutido
+    38,   # Aves y pollo
+    31,   # Pescado fresco
+]
+
 NUTRITION_DEFAULTS = {
-    "nutriscore_grade": None,
     "energy_kcal_100g": None,
     "fat_100g": None,
     "saturated_fat_100g": None,
@@ -35,10 +60,12 @@ def build_mercadona_product(summary: dict) -> dict:
         if off_nutrition:
             nutrition = {**NUTRITION_DEFAULTS, **off_nutrition}
     ingredients = _strip_html(detail.get("nutrition_information", {}).get("ingredients"))
+    external_id = str(detail["id"])
 
     return {
-        "supermarket": "mercadona",
-        "external_id": str(detail["id"]),
+        "supermarket": "Mercadona",
+        "external_id": external_id,
+        "id": f"mercadona_{external_id}",
         "name": detail["display_name"],
         "brand": detail.get("details", {}).get("brand"),
         "photo_url": detail.get("photos", [{}])[0].get("zoom") if detail.get("photos") else detail.get("thumbnail"),
@@ -87,10 +114,12 @@ def build_dia_product(item: dict) -> dict:
     detail = dia_client.get_product_detail(item["object_id"])
     ingredients = _strip_html(detail.get("ingredients", {}).get("text"))
     images = detail.get("images") or []
+    external_id = str(detail["sku_id"])
 
     return {
-        "supermarket": "dia",
-        "external_id": str(detail["sku_id"]),
+        "supermarket": "Dia",
+        "external_id": external_id,
+        "id": f"dia_{external_id}",
         "name": detail.get("primary_info", {}).get("title") or item.get("display_name"),
         "brand": item.get("brand"),
         "photo_url": f"https://www.dia.es{images[0]}" if images else None,
