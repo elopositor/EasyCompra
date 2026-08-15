@@ -16,6 +16,17 @@ DATA_DIR = Path(__file__).parent.parent / "data"
 # Supermercados servidos desde JSON (actualizado por GitHub Actions)
 JSON_SUPERMARKETS = {"Carrefour", "Lidl", "Mercadona", "Dia"}
 
+# Compatibilidad con la app Android v5, cuyo codigo fuente ya no tenemos.
+# Deserializa con kotlinx.serialization y su modelo incluye nutriscore_grade
+# sin valor por defecto: si el campo no llega, lanza MissingFieldException y la
+# app se cierra. El campo esta eliminado del modelo, los scrapers y los datos,
+# pero la API lo sigue enviando a null para no romper esa version instalada.
+LEGACY_FIELDS = {"nutriscore_grade": None}
+
+
+def _with_legacy_fields(product: dict) -> dict:
+    return {**LEGACY_FIELDS, **product}
+
 
 def _load_json_products(supermarket: str) -> list[dict]:
     path = DATA_DIR / f"{supermarket.lower()}.json"
@@ -67,7 +78,7 @@ def list_products(
         value = p.get(sort_by)
         return value if value is not None else float("inf")
 
-    return sorted(products, key=sort_key)
+    return [_with_legacy_fields(p) for p in sorted(products, key=sort_key)]
 
 
 @app.get("/health")
