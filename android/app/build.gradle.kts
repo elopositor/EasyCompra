@@ -12,8 +12,8 @@ android {
         applicationId = "com.easycompra"
         minSdk = 26
         targetSdk = 34
-        versionCode = 7
-        versionName = "v7"
+        versionCode = 8
+        versionName = "v8"
     }
 
     buildTypes {

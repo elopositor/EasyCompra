@@ -1,5 +1,6 @@
 package com.easycompra
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -12,12 +13,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -47,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,12 +58,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import java.util.Locale
 
-const val VERSION_APP = "v7"
+const val VERSION_APP = "v8"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Antes de nada: si la app se cierra, que quede registrado por que.
+        RegistroFallos.instalar(this)
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme(colorScheme = lightColorScheme()) {
@@ -78,9 +85,13 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun Pantalla(vm: MainViewModel = viewModel()) {
     val s by vm.state.collectAsState()
+    val contexto = LocalContext.current
     var ajustesAbiertos by remember { mutableStateOf(false) }
+    var informeFallo by remember { mutableStateOf(RegistroFallos.leer(contexto)) }
 
-    val visibles = remember(s.productos, s.busqueda, s.orden, s.sinNata) { vm.filtrar(s) }
+    // La lista ya viene filtrada y ordenada del ViewModel, fuera del hilo de la
+    // interfaz: aqui no se hace ningun trabajo por cada tecla pulsada.
+    val visibles = s.visibles
 
     Scaffold(
         topBar = {
@@ -163,10 +174,12 @@ fun Pantalla(vm: MainViewModel = viewModel()) {
                             modifier = Modifier.padding(horizontal = 24.dp),
                         )
                         Spacer(Modifier.height(6.dp))
-                        Text(s.servidor, fontSize = 12.sp, color = Color.Gray)
+                        if (s.origen == Origen.SERVIDOR) {
+                            Text(s.servidor, fontSize = 12.sp, color = Color.Gray)
+                        }
                         Spacer(Modifier.height(12.dp))
                         Button(onClick = { vm.cargar() }) { Text("Reintentar") }
-                        TextButton(onClick = { ajustesAbiertos = true }) { Text("Cambiar servidor") }
+                        TextButton(onClick = { ajustesAbiertos = true }) { Text("Ajustes") }
                     }
                 }
 
@@ -192,7 +205,9 @@ fun Pantalla(vm: MainViewModel = viewModel()) {
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
                     )
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(visibles) { p -> Tarjeta(p) }
+                        // Con clave estable, al filtrar se reutilizan las filas
+                        // que ya estaban en pantalla en vez de rehacerlas todas.
+                        items(visibles, key = { clave(it) }) { p -> Tarjeta(p) }
                     }
                 }
             }
@@ -255,12 +270,42 @@ fun Pantalla(vm: MainViewModel = viewModel()) {
             },
         )
     }
-}
 
-/** "2026-08-29T19:55:14+00:00" -> "29/08". Null si no tiene esa forma. */
-private fun fechaCorta(iso: String?): String? {
-    val partes = iso?.take(10)?.split("-") ?: return null
-    return if (partes.size == 3) "${partes[2]}/${partes[1]}" else null
+    // Informe del ultimo cierre inesperado, si lo hubo.
+    val informe = informeFallo
+    if (informe != null) {
+        AlertDialog(
+            onDismissRequest = { informeFallo = null },
+            title = { Text("La app se cerro la ultima vez") },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 320.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(informe, fontSize = 11.sp)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val envio = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_SUBJECT, "EasyCompra: informe de cierre")
+                        putExtra(Intent.EXTRA_TEXT, informe)
+                    }
+                    runCatching {
+                        contexto.startActivity(Intent.createChooser(envio, "Enviar informe"))
+                    }
+                }) { Text("Enviar") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    RegistroFallos.borrar(contexto)
+                    informeFallo = null
+                }) { Text("Descartar") }
+            },
+        )
+    }
 }
 
 @Composable
@@ -280,7 +325,13 @@ private fun Tarjeta(p: Product) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             AsyncImage(
-                model = p.photo_url,
+                // Mercadona sirve sus fotos a 3600x3600 para un hueco de 64dp.
+                // Se pide el tamano justo: menos datos y menos memoria.
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(fotoPequena(p.photo_url))
+                    .size(192)
+                    .crossfade(false)
+                    .build(),
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
             )
@@ -322,3 +373,16 @@ private fun Tarjeta(p: Product) {
 private fun num(v: Double): String =
     if (v == v.toInt().toDouble()) v.toInt().toString()
     else String.format(Locale.US, "%.2f", v)
+
+/** "2026-08-29T19:55:14+00:00" -> "29/08". Null si no tiene esa forma. */
+private fun fechaCorta(iso: String?): String? {
+    val partes = iso?.take(10)?.split("-") ?: return null
+    return if (partes.size == 3) "${partes[2]}/${partes[1]}" else null
+}
+
+private val TAMANO_EN_URL = Regex("([?&])(w|h|width|height)=\\d+")
+
+/** Baja el tamano que se pide en la URL de la foto, si la fuente lo admite. */
+private fun fotoPequena(url: String?): String? = url?.replace(TAMANO_EN_URL) {
+    "${it.groupValues[1]}${it.groupValues[2]}=300"
+}

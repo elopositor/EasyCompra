@@ -46,6 +46,26 @@ def _strip_html(text: str | None) -> str:
     return re.sub(r"<[^>]+>", "", text)
 
 
+# Mercadona sirve la foto "zoom" a 3600x3600, que en la app ocupa un hueco de
+# 64dp: son megas de descarga y de memoria para nada. Se pide un tamano acorde.
+_URL_SIZE_RE = re.compile(r"([?&])(w|h|width|height)=\d+")
+FOTO_PX = 300
+
+
+def _photo_url(detail: dict) -> str | None:
+    photos = detail.get("photos") or []
+    primera = photos[0] if photos else {}
+    url = (
+        primera.get("regular")
+        or primera.get("zoom")
+        or primera.get("thumbnail")
+        or detail.get("thumbnail")
+    )
+    if not url:
+        return None
+    return _URL_SIZE_RE.sub(rf"\g<1>\g<2>={FOTO_PX}", url)
+
+
 def _contains_nata(ingredients: str) -> bool:
     return bool(re.search(r"\bnata\b", ingredients.lower()))
 
@@ -113,7 +133,7 @@ def build_mercadona_product(summary: dict) -> dict:
         "id": f"mercadona_{external_id}",
         "name": detail["display_name"],
         "brand": detail.get("details", {}).get("brand"),
-        "photo_url": detail.get("photos", [{}])[0].get("zoom") if detail.get("photos") else detail.get("thumbnail"),
+        "photo_url": _photo_url(detail),
         "unit_price": detail.get("price_instructions", {}).get("unit_price"),
         "reference_price": detail.get("price_instructions", {}).get("reference_price"),
         "reference_format": detail.get("price_instructions", {}).get("reference_format"),
