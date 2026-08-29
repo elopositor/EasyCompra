@@ -173,9 +173,10 @@ fun Pantalla(vm: MainViewModel = viewModel()) {
                 visibles.isEmpty() -> Caja { Text("Sin resultados") }
 
                 else -> {
-                    if (s.aviso != null) {
+                    val aviso = s.aviso
+                    if (aviso != null) {
                         Text(
-                            s.aviso,
+                            aviso,
                             fontSize = 12.sp,
                             color = Color(0xFF8A5A00),
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
