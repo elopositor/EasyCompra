@@ -40,10 +40,31 @@ jobs:
           git config user.name  "EasyCompra Bot"
           git config user.email "bot@easycompra.local"
           git add backend/data/
-          git diff --staged --quiet && echo "Sin cambios" || (
-            git commit -m "sync: datos $(date +'%Y-%m-%d %H:%M') UTC"
-            git push
-          )
+
+          if git diff --staged --quiet; then
+            echo "Sin cambios"
+            exit 0
+          fi
+
+          git commit -m "sync: datos $(date +'%Y-%m-%d %H:%M') UTC"
+
+          # El sync tarda unos 40 minutos: en esa ventana puede haber entrado
+          # otro commit y el push seria rechazado, perdiendo los datos del dia.
+          # Se reintenta reincorporando lo que haya llegado mientras tanto.
+          guardado=0
+          for intento in 1 2 3; do
+            if git pull --rebase --autostash && git push; then
+              guardado=1
+              break
+            fi
+            echo "Push rechazado (intento $intento). Reintentando..."
+            sleep 5
+          done
+
+          if [ "$guardado" != "1" ]; then
+            echo "No se ha podido guardar tras 3 intentos."
+            exit 1
+          fi
 
       # Los mismos JSON, publicados en el repositorio publico de datos, que es
       # de donde los lee la app. Se hace siempre que el paso de sync haya
