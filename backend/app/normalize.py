@@ -50,6 +50,51 @@ def _contains_nata(ingredients: str) -> bool:
     return bool(re.search(r"\bnata\b", ingredients.lower()))
 
 
+# Cada fuente devuelve los numeros a su manera: Mercadona manda los precios
+# como texto ("1.05"), Dia mezcla int y float y Lidl a veces usa coma decimal.
+# El consumidor (la app) espera siempre numero o null, asi que el tipo se fija
+# aqui, en un unico sitio, antes de escribir los JSON.
+NUMERIC_FIELDS = (
+    "unit_price",
+    "reference_price",
+    "energy_kcal_100g",
+    "fat_100g",
+    "saturated_fat_100g",
+    "carbohydrates_100g",
+    "sugars_100g",
+    "proteins_100g",
+    "salt_100g",
+)
+
+_NUMBER_RE = re.compile(r"-?\d+(?:\.\d+)?")
+
+
+def to_float(value) -> float | None:
+    """Convierte a float lo que venga: '1,05', '1.05 EUR', 3, 3.0, None."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        match = _NUMBER_RE.search(value.strip().replace(",", "."))
+        if match:
+            try:
+                return float(match.group())
+            except ValueError:
+                return None
+    return None
+
+
+def coerce_types(product: dict) -> dict:
+    """Fija el tipo de cada campo del producto antes de publicarlo."""
+    clean = dict(product)
+    for field in NUMERIC_FIELDS:
+        if field in clean:
+            clean[field] = to_float(clean[field])
+    clean["contains_nata"] = bool(clean.get("contains_nata"))
+    return clean
+
+
 def build_mercadona_product(summary: dict) -> dict:
     detail = mercadona_client.get_product_detail(summary["id"])
     ean = detail.get("ean")

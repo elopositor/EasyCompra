@@ -56,7 +56,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import java.util.Locale
 
-const val VERSION_APP = "v6"
+const val VERSION_APP = "v7"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -173,8 +173,19 @@ fun Pantalla(vm: MainViewModel = viewModel()) {
                 visibles.isEmpty() -> Caja { Text("Sin resultados") }
 
                 else -> {
+                    if (s.aviso != null) {
+                        Text(
+                            s.aviso,
+                            fontSize = 12.sp,
+                            color = Color(0xFF8A5A00),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        )
+                    }
                     Text(
-                        "${visibles.size} productos",
+                        listOfNotNull(
+                            "${visibles.size} productos",
+                            fechaCorta(s.actualizado)?.let { "datos del $it" },
+                        ).joinToString(" - "),
                         fontSize = 12.sp,
                         color = Color.Gray,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
@@ -189,28 +200,52 @@ fun Pantalla(vm: MainViewModel = viewModel()) {
 
     if (ajustesAbiertos) {
         var url by remember { mutableStateOf(s.servidor) }
+        var origen by remember { mutableStateOf(s.origen) }
         AlertDialog(
             onDismissRequest = { ajustesAbiertos = false },
-            title = { Text("Servidor") },
+            title = { Text("Origen de los datos") },
             text = {
                 Column {
+                    FilterChip(
+                        selected = origen == Origen.GITHUB,
+                        onClick = { origen = Origen.GITHUB },
+                        label = { Text("Internet (recomendado)") },
+                    )
                     Text(
-                        "Direccion del backend. Por WiFi local usa la IP del PC, " +
-                            "por ejemplo http://192.168.1.131:8123",
-                        fontSize = 12.sp,
+                        "Descarga los datos publicados cada dia. No hace falta " +
+                            "tener el ordenador encendido.",
+                        fontSize = 11.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(top = 2.dp, bottom = 10.dp),
                     )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = url,
-                        onValueChange = { url = it },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
+
+                    FilterChip(
+                        selected = origen == Origen.SERVIDOR,
+                        onClick = { origen = Origen.SERVIDOR },
+                        label = { Text("Servidor propio") },
                     )
+                    Text(
+                        "Solo si tienes el backend arrancado en casa.",
+                        fontSize = 11.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                    if (origen == Origen.SERVIDOR) {
+                        Spacer(Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = url,
+                            onValueChange = { url = it },
+                            singleLine = true,
+                            label = { Text("Direccion") },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
                     vm.setServidor(url.trim())
+                    vm.setOrigen(origen)
                     ajustesAbiertos = false
                 }) { Text("Guardar") }
             },
@@ -219,6 +254,12 @@ fun Pantalla(vm: MainViewModel = viewModel()) {
             },
         )
     }
+}
+
+/** "2026-08-29T19:55:14+00:00" -> "29/08". Null si no tiene esa forma. */
+private fun fechaCorta(iso: String?): String? {
+    val partes = iso?.take(10)?.split("-") ?: return null
+    return if (partes.size == 3) "${partes[2]}/${partes[1]}" else null
 }
 
 @Composable

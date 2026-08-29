@@ -19,20 +19,26 @@ GitHub Actions (cron diario 06:00 UTC)
         │
         │  scrapers + APIs públicas + OpenFoodFacts
         ▼
-backend/data/*.json  ──commit al repo──►  histórico versionado en git
+backend/data/*.json  ──commit──►  histórico versionado en este repo (privado)
         │
-        ▼
-FastAPI  (backend/app/main.py, puerto 8123)
-        │  GET /products
-        ▼
-App Android (Kotlin + Jetpack Compose)
+        └──publica──►  github.com/elopositor/EasyCompra-datos  (público)
+                                    │
+                                    │  raw.githubusercontent.com
+                                    ▼
+                       App Android (Kotlin + Jetpack Compose)
 ```
 
-La pieza clave es que **los datos no se scrapean en tiempo real**. Un workflow de
-GitHub Actions ejecuta la sincronización una vez al día, guarda el resultado como
-JSON dentro del propio repositorio y lo commitea. El servidor FastAPI se limita a
-leer esos JSON y servirlos, así que arranca en un segundo y no depende de que los
-supermercados respondan cuando el usuario abre la app.
+Dos ideas sostienen el diseño:
+
+1. **Los datos no se scrapean en tiempo real.** Un workflow de GitHub Actions
+   sincroniza una vez al día y guarda el resultado como JSON en el repositorio.
+2. **La app no necesita servidor.** Lee esos JSON directamente del repositorio
+   público de datos, así que funciona con el PC apagado, desde 4G y sin abrir
+   ningún puerto en casa. Guarda además una copia local para seguir funcionando
+   sin conexión.
+
+El backend FastAPI sigue existiendo y sirve los mismos datos, pero ahora es
+**opcional**: solo hace falta para desarrollo. Se elige desde Ajustes en la app.
 
 ### Fuentes de datos
 
@@ -61,7 +67,9 @@ la ejecución en rojo en lugar de commitear un fichero vacío en silencio.
 
 ```
 EasyCompra/
-├── .github/workflows/sync_supermarkets.yml   Cron diario de sincronización
+├── .github/workflows/
+│   ├── sync_supermarkets.yml  Cron diario: sincroniza y publica los datos
+│   └── build_apk.yml          Compila la APK y la publica como release
 ├── backend/
 │   ├── app/
 │   │   ├── main.py                FastAPI: /products, /health, /sync/*
@@ -95,6 +103,13 @@ Común a las cuatro fuentes (`backend/app/db.py`, espejado en `android/…/Data.
 
 `contains_nata` es un flag calculado buscando la palabra *nata* en los
 ingredientes, para el filtro rápido de la app.
+
+**Contrato de tipos.** Cada fuente devuelve los números a su manera: Mercadona
+manda los precios como texto (`"1.05"`), Dia mezcla enteros y decimales, Lidl a
+veces usa coma decimal. `normalize.coerce_types()` fija el tipo en un único punto
+antes de escribir los JSON, de modo que los campos de precio y nutrición son
+**siempre número o `null`**, nunca texto. Sin eso, el parser de la app rechazaba el
+catálogo entero de Mercadona.
 
 ---
 
@@ -157,16 +172,28 @@ también el 8123 en la *Security List* de la VCN desde la consola de Oracle.
 
 ### App Android
 
+**No hace falta compilar nada.** Cada cambio en `android/` dispara el workflow
+*Compilar APK*, que publica la APK lista para instalar en la pestaña
+[Releases](https://github.com/elopositor/EasyCompra/releases). Se descarga desde el
+móvil y se instala.
+
+Para compilarla en local (requiere el SDK de Android):
+
 ```bash
 cd android
 ./gradlew assembleDebug
 # APK en android/app/build/outputs/apk/debug/
 ```
 
-También hay APKs ya compilados en la raíz (`EasyCompra-v6.apk`). Al abrir la app,
-en **Ajustes** (icono de engranaje) se indica la dirección del backend: la IP local
-del PC (`http://192.168.1.131:8123`) o la URL de ngrok. Queda guardada en
-`SharedPreferences`.
+Al abrir la app, en **Ajustes** (icono de engranaje) se elige el origen de los datos:
+
+- **Internet** (por defecto): descarga los JSON del repositorio público. No requiere
+  nada encendido en casa.
+- **Servidor propio**: la dirección del backend en la red local, por ejemplo
+  `http://192.168.1.131:8123`.
+
+La elección y la dirección quedan guardadas en `SharedPreferences`, y la última
+descarga correcta se cachea en disco para poder abrir la app sin conexión.
 
 Pantalla única: buscador, chips de supermercado, orden por precio / azúcares /
 nombre, filtro "sin nata" y lista de tarjetas con foto, precio y nutrición. El
@@ -188,25 +215,39 @@ campos en el backend ya no puede tumbar la app.
 
 ---
 
+## Seguridad
+
+- **La app no abre ningún puerto.** Es un cliente: descarga JSON por HTTPS y los
+  pinta. Leyendo de GitHub no hay nada escuchando en la red de casa.
+- **La API no tiene autenticación.** Por eso el backend es opcional y de uso local.
+  Escucha en `0.0.0.0`, así que cualquiera en la misma WiFi puede llamarla; y
+  `POST /sync/all` lanza navegadores (Playwright y camoufox) en la máquina que la
+  ejecuta. **No exponerla a internet** —ngrok, redirección de puertos en el router—
+  sin ponerle antes una clave.
+- **Qué es público y qué no.** El repositorio de código es privado. Solo se publican
+  los JSON de precios en `EasyCompra-datos`: datos de producto de supermercados, sin
+  nada personal.
+- **Credenciales.** El sync publica en el repositorio de datos con una *deploy key*
+  de escritura, guardada como secret `DATOS_DEPLOY_KEY` y limitada a ese único
+  repositorio. No hay tokens ni claves en el código; `.env` y `*.db` están en
+  `.gitignore`.
+- La IP privada que aparece como valor por defecto (`192.168.1.131`) es una dirección
+  de red local (RFC1918): no es accesible desde internet y no identifica nada.
+
 ## Futuras mejoras
 
 ### Prioridad alta
 
-- **Backend público y estable.** Hoy la app apunta a una IP de red local o a una URL
-  de ngrok que cambia en cada arranque. Desplegar el backend en un host fijo
-  (el script de Oracle Cloud Free Tier ya existe) y fijar esa URL como valor por defecto.
-- **Modo sin servidor.** Como los JSON ya viven en el repositorio, la app podría
-  leerlos directamente desde GitHub Raw o GitHub Pages y funcionar sin backend
-  alguno. Es la vía más rápida para que deje de depender del PC de casa.
-- **`DB_PATH` desde el entorno.** `docker-compose.yml` define la variable `DB_PATH`,
-  pero `db.py` la ignora y usa una ruta fija (`sqlite:///easycompra.db`), así que la
-  base de datos no acaba en el volumen montado. Leerla con `os.getenv`.
 - **Comparar el mismo producto entre supermercados.** Es el objetivo que da nombre al
   proyecto y todavía no existe: agrupar por EAN (o por nombre normalizado cuando no
   haya EAN) y mostrar una tarjeta por producto con el precio de cada cadena.
 - **Precio por unidad de referencia.** El modelo ya guarda `reference_price` y
   `reference_format`, pero la app enseña `unit_price`. Comparar €/kg y €/L es la
   única forma honesta de comparar formatos distintos.
+- **`DB_PATH` desde el entorno.** `docker-compose.yml` define la variable `DB_PATH`,
+  pero `db.py` la ignora y usa una ruta fija (`sqlite:///easycompra.db`), así que la
+  base de datos no acaba en el volumen montado. Leerla con `os.getenv`. Afecta solo
+  al backend opcional.
 
 ### Datos y cobertura
 
@@ -226,7 +267,6 @@ campos en el backend ya no puede tumbar la app.
 - Ficha de detalle del producto: ingredientes completos, alérgenos, tabla nutricional
   y enlace a la web del supermercado (`share_url`).
 - Lista de la compra, con reparto por supermercado según dónde salga más barato.
-- Caché local (Room o DataStore) para poder abrir la app sin conexión.
 - Escaneo de códigos de barras para buscar un producto por EAN.
 - Modo oscuro: el tema está fijado a `lightColorScheme()`.
 - Favoritos y filtros nutricionales configurables, más allá del "sin nata" actual
@@ -239,10 +279,8 @@ campos en el backend ya no puede tumbar la app.
 - **Tests de contrato de los scrapers**, que avisen cuando un supermercado cambia su
   HTML o su API en vez de descubrirlo por un JSON vacío, con notificación al fallar el
   workflow.
-- **Publicar los APK como GitHub Releases** en lugar de dejarlos en el árbol del
-  repositorio (27 MB de binarios sin trackear en la raíz).
 - **Firmar la APK de release**: la configuración de Gradle solo define el build `debug`,
-  sin minificar.
+  sin minificar. Requiere un keystore guardado como secret.
 - Linter y tipos en el backend (`ruff` + `mypy`) y CI que compile la app en cada push.
 - Caché HTTP (ETag / `Cache-Control`) y compresión gzip en `/products`.
 
