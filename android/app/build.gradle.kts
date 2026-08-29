@@ -12,13 +12,31 @@ android {
         applicationId = "com.easycompra"
         minSdk = 26
         targetSdk = 34
-        versionCode = 8
-        versionName = "v8"
+        versionCode = 9
+        versionName = "v9"
+    }
+
+    // Firma propia y estable. Sin ella, cada maquina firma con su certificado
+    // de depuracion y Android obliga a desinstalar la app para actualizarla.
+    // En local no hace falta: si no hay keystore, se usa la firma de siempre.
+    val ficheroKeystore = rootProject.file("easycompra.jks")
+    val clave = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+
+    signingConfigs {
+        if (ficheroKeystore.exists() && !clave.isNullOrBlank()) {
+            create("propia") {
+                storeFile = ficheroKeystore
+                storePassword = clave
+                keyAlias = "easycompra"
+                keyPassword = clave
+            }
+        }
     }
 
     buildTypes {
         debug {
             isMinifyEnabled = false
+            signingConfigs.findByName("propia")?.let { signingConfig = it }
         }
     }
 
