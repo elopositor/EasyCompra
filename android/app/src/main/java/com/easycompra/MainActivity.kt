@@ -61,7 +61,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import java.util.Locale
 
-const val VERSION_APP = "v8"
+const val VERSION_APP = "v9"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

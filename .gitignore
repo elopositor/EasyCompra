@@ -8,3 +8,7 @@ backend/app/**/__pycache__/
 *.html
 debug_*.json
 carrefour_api.json
+
+# Clave de firma de la app: nunca al repositorio
+easycompra.jks
+easycompra.jks.password

@@ -36,11 +36,30 @@ jobs:
           key: gradle-${{ hashFiles('android/**/*.gradle*') }}
           restore-keys: gradle-
 
+      # Sin esto cada compilacion firmaria con un certificado distinto y el
+      # movil pediria desinstalar la app antes de cada actualizacion.
+      - name: Restaurar la clave de firma
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "Sin ANDROID_KEYSTORE_B64: se firmara con la clave de depuracion."
+          else
+            echo "$KEYSTORE_B64" | base64 -d > android/easycompra.jks
+            echo "Clave de firma restaurada."
+          fi
+
       - name: Compilar APK
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Borrar la clave del disco
+        if: always()
+        run: rm -f android/easycompra.jks
 
       - name: Leer version de la app
         id: version
