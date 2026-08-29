@@ -30,9 +30,44 @@ def _write(name: str, products: list[dict]) -> int:
     if not products:
         print(f"[{name}] 0 productos: se conserva el JSON anterior, no se sobreescribe")
         return 0
+    # Tipos fijados aqui: la app espera numero o null, nunca texto.
+    from .normalize import coerce_types
+
+    products = [coerce_types(p) for p in products]
     path.write_text(json.dumps(products, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[{name}] {len(products)} productos -> {path}")
     return len(products)
+
+
+def _write_index(counts: dict[str, int]) -> None:
+    """Manifiesto que la app lee primero: fecha del sync y que hay disponible."""
+    from datetime import datetime, timezone
+
+    index = {
+        "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "supermarkets": {},
+        "total": 0,
+    }
+    for name in ("carrefour", "dia", "lidl", "mercadona"):
+        path = DATA_DIR / f"{name}.json"
+        if not path.exists():
+            continue
+        try:
+            productos = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        index["supermarkets"][name] = {
+            "file": f"{name}.json",
+            "count": len(productos),
+            # Si la fuente fallo, sus datos son los del sync anterior.
+            "fresh": counts.get(name.capitalize(), 0) > 0,
+        }
+        index["total"] += len(productos)
+
+    (DATA_DIR / "index.json").write_text(
+        json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    print(f"[index] {index['total']} productos en total -> {DATA_DIR / 'index.json'}")
 
 
 def _dedupe(products: list[dict]) -> dict[str, dict]:
@@ -89,6 +124,10 @@ async def main() -> int:
         "Dia": await asyncio.to_thread(sync_dia),
     }
     print("=== Completado: " + " + ".join(f"{n} {name}" for name, n in counts.items()) + " ===")
+
+    # El indice se escribe siempre, tambien si alguna fuente ha fallado: refleja
+    # lo que hay publicado ahora mismo y marca que fuentes son de este sync.
+    _write_index(counts)
 
     vacias = [name for name, n in counts.items() if n == 0]
     if vacias:

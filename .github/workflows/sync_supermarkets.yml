@@ -44,3 +44,39 @@ jobs:
             git commit -m "sync: datos $(date +'%Y-%m-%d %H:%M') UTC"
             git push
           )
+
+      # Los mismos JSON, publicados en el repositorio publico de datos, que es
+      # de donde los lee la app. Se hace siempre que el paso de sync haya
+      # producido ficheros, incluso si alguna fuente fallo: en ese caso se
+      # republica lo ultimo bueno, que es justo lo que la app debe seguir viendo.
+      - name: Publicar en EasyCompra-datos
+        if: always()
+        env:
+          DEPLOY_KEY: ${{ secrets.DATOS_DEPLOY_KEY }}
+        run: |
+          if [ -z "$DEPLOY_KEY" ]; then
+            echo "Falta el secret DATOS_DEPLOY_KEY: no se publica."
+            exit 0
+          fi
+
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+
+          git clone --depth 1 git@github.com:elopositor/EasyCompra-datos.git /tmp/datos
+          cp backend/data/*.json /tmp/datos/
+
+          cd /tmp/datos
+          git config user.name  "EasyCompra Bot"
+          git config user.email "bot@easycompra.local"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "Sin cambios que publicar"
+          else
+            git commit -m "datos: $(date +'%Y-%m-%d %H:%M') UTC"
+            git push
+            echo "Publicado en https://github.com/elopositor/EasyCompra-datos"
+          fi
+
+          shred -u ~/.ssh/id_ed25519 2>/dev/null || rm -f ~/.ssh/id_ed25519
