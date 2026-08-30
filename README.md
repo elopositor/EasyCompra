@@ -195,9 +195,24 @@ Al abrir la app, en **Ajustes** (icono de engranaje) se elige el origen de los d
 La elección y la dirección quedan guardadas en `SharedPreferences`, y la última
 descarga correcta se cachea en disco para poder abrir la app sin conexión.
 
-Pantalla única: buscador, chips de supermercado, orden por precio / azúcares /
-nombre, filtro "sin nata" y lista de tarjetas con foto, precio y nutrición. El
-filtrado y la ordenación se hacen en local sobre lo ya descargado.
+Cinco secciones, en la barra inferior:
+
+- **Buscar**: el comparador. Chips de supermercado, orden por precio / azúcares /
+  nombre, filtro "sin nata", y tarjetas con foto, precio y nutrición.
+- **Despensa**: lo que hay en casa, por ubicación (nevera, congelador, despensa,
+  bebidas) y subcategoría. Un mismo producto puede estar en varios sitios a la vez.
+  Cantidades, estado de stock y marcado de "necesito comprar".
+- **Recetas**: alta y edición con ingredientes, unidades y pasos. Favoritas,
+  ajuste de raciones que recalcula las cantidades, y para cada ingrediente si lo
+  tienes en la despensa o cuánto falta. Botón para llevar lo que falta a la lista.
+- **Semana**: planificador con las cuatro comidas del día, desde tus recetas o
+  escrito a mano. Incluye un resumen de la semana y un botón que manda a la lista
+  lo que falta para todo lo planificado.
+- **Lista**: la lista de la compra. Se llena sola desde la despensa y las recetas.
+
+La despensa, el recetario y el planificador se guardan en el móvil (Room); la
+lista de la compra, en preferencias. El filtrado del buscador se hace en local
+sobre lo ya descargado, fuera del hilo de la interfaz.
 
 ---
 
@@ -264,10 +279,22 @@ campos en el backend ya no puede tumbar la app.
 
 ### App Android
 
-- Ficha de detalle del producto: ingredientes completos, alérgenos, tabla nutricional
-  y enlace a la web del supermercado (`share_url`).
-- Lista de la compra, con reparto por supermercado según dónde salga más barato.
+Lo que tenía la v5 y aún no se ha reconstruido (ver `referencia/LEEME.md`):
+
+- **Vincular un ingrediente a un producto concreto de la despensa.** Ahora el cruce
+  se hace por nombre exacto o por `linkedProductId`, pero no hay pantalla para
+  elegir el producto: la v5 tenía un "Busca el producto de tu despensa que
+  corresponde a…". Sin eso, "Tomate frito" y "tomate frito Hacendado" no se cruzan.
+- **Ficha de detalle del producto** con nutrición completa, alérgenos, NutriScore y
+  enlace al supermercado (`share_url`).
+- **Favoritos de productos** y el comparador entre dos productos.
+- **Modo cocinar** paso a paso, y los avisos de descongelar (`DefrostAlert`).
+
+Y lo que no tenía ninguna de las dos:
+
+- Lista de la compra con reparto por supermercado según dónde salga más barato.
 - Escaneo de códigos de barras para buscar un producto por EAN.
+- Caducidades en la despensa, con aviso de lo que va a vencer.
 - Modo oscuro: el tema está fijado a `lightColorScheme()`.
 - Favoritos y filtros nutricionales configurables, más allá del "sin nata" actual
   (sin lactosa, sin azúcares añadidos, alto en proteína, por alérgeno).
