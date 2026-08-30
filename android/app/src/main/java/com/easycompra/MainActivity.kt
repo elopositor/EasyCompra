@@ -22,9 +22,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Kitchen
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -34,6 +38,8 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -50,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -59,6 +66,11 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.easycompra.datos.DatosViewModel
+import com.easycompra.ui.PantallaDespensa
+import com.easycompra.ui.PantallaLista
+import com.easycompra.ui.PantallaPlan
+import com.easycompra.ui.PantallaRecetas
 import java.util.Locale
 
 const val VERSION_APP = "v10"
@@ -74,11 +86,63 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    Pantalla()
+                    AppEasyCompra()
                 }
             }
         }
     }
+}
+
+private enum class Seccion(val etiqueta: String) {
+    BUSCAR("Buscar"),
+    DESPENSA("Despensa"),
+    RECETAS("Recetas"),
+    PLAN("Semana"),
+    LISTA("Lista"),
+}
+
+@Composable
+fun AppEasyCompra() {
+    var seccion by remember { mutableStateOf(Seccion.BUSCAR) }
+    val datos: DatosViewModel = viewModel()
+
+    val despensa by datos.despensa.collectAsState()
+    val recetas by datos.recetas.collectAsState()
+    val plan by datos.plan.collectAsState()
+    val lista by datos.lista.collectAsState()
+
+    Scaffold(
+        bottomBar = {
+            NavigationBar {
+                Seccion.entries.forEach { s ->
+                    NavigationBarItem(
+                        selected = seccion == s,
+                        onClick = { seccion = s },
+                        icon = { Icon(iconoDe(s), contentDescription = s.etiqueta) },
+                        label = { Text(s.etiqueta, fontSize = 10.sp) },
+                    )
+                }
+            }
+        },
+    ) { padding ->
+        Box(Modifier.padding(padding)) {
+            when (seccion) {
+                Seccion.BUSCAR -> Pantalla()
+                Seccion.DESPENSA -> PantallaDespensa(datos, despensa)
+                Seccion.RECETAS -> PantallaRecetas(datos, recetas, despensa)
+                Seccion.PLAN -> PantallaPlan(datos, plan, recetas)
+                Seccion.LISTA -> PantallaLista(datos, lista)
+            }
+        }
+    }
+}
+
+private fun iconoDe(seccion: Seccion): ImageVector = when (seccion) {
+    Seccion.BUSCAR -> Icons.Default.Search
+    Seccion.DESPENSA -> Icons.Default.Kitchen
+    Seccion.RECETAS -> Icons.AutoMirrored.Filled.MenuBook
+    Seccion.PLAN -> Icons.Default.CalendarMonth
+    Seccion.LISTA -> Icons.Default.ShoppingCart
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
