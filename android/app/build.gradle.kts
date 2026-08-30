@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization")
+    id("com.google.devtools.ksp")
 }
 
 android {
@@ -12,8 +13,8 @@ android {
         applicationId = "com.easycompra"
         minSdk = 26
         targetSdk = 34
-        versionCode = 9
-        versionName = "v9"
+        versionCode = 10
+        versionName = "v10"
     }
 
     // Firma propia y estable. Sin ella, cada maquina firma con su certificado
@@ -80,4 +81,11 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 
     implementation("io.coil-kt:coil-compose:2.6.0")
+
+    // Despensa, recetario y planificador: datos guardados en el movil.
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
+
+    implementation("androidx.compose.material:material-icons-extended")
 }
