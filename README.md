@@ -15,7 +15,6 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/elopositor/EasyCompra/releases/latest"><b>Descargar la APK</b></a> ·
   <a href="https://github.com/elopositor/EasyCompra-datos"><b>Datos abiertos</b></a>
 </p>
 
@@ -26,7 +25,7 @@ Reúne el catálogo de alimentación de **Carrefour, Lidl, Mercadona y Dia** en 
 sola lista, lo enriquece con la información nutricional de OpenFoodFacts y lo
 sirve a una app Android nativa desde la que buscar, filtrar y ordenar.
 
-Estado actual: **v10** de la app Android, publicada como release.
+Estado actual: **v10** de la app Android.
 Datos vivos: ~1.800 productos (Mercadona 706 · Dia 502 · Carrefour 471 · Lidl 121),
 actualizados automáticamente cada día a las 06:00 UTC. La cifra baila entre
 sincronizaciones según lo que devuelva cada fuente.
@@ -90,7 +89,7 @@ la ejecución en rojo en lugar de commitear un fichero vacío en silencio.
 EasyCompra/
 ├── .github/workflows/
 │   ├── sync_supermarkets.yml  Cron diario: sincroniza y publica los datos
-│   └── build_apk.yml          Compila la APK y la publica como release
+│   └── build_apk.yml          Compila la APK (verificacion del build)
 ├── backend/
 │   ├── app/
 │   │   ├── main.py                FastAPI: /products, /health, /sync/*
@@ -193,12 +192,14 @@ también el 8123 en la *Security List* de la VCN desde la consola de Oracle.
 
 ### App Android
 
-**No hace falta compilar nada.** Cada cambio en `android/` dispara el workflow
-*Compilar APK*, que publica la APK lista para instalar en la pestaña
-[Releases](https://github.com/elopositor/EasyCompra/releases). Se descarga desde el
-móvil y se instala.
+Cada cambio en `android/` dispara el workflow *Compilar APK*, que comprueba en
+GitHub Actions que el proyecto sigue compilando.
 
-Para compilarla en local (requiere el SDK de Android):
+**La APK no se distribuye desde aquí.** La app es de uso personal y se instala en
+privado, así que el workflow no publica releases ni artefactos: en un repositorio
+público cualquiera podría descargarlos. Lo que se publica es el código y los datos.
+
+Para compilarla (requiere el SDK de Android):
 
 ```bash
 cd android
