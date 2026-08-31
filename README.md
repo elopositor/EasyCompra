@@ -1,11 +1,32 @@
-# EasyCompra
+<h1 align="center">EasyCompra</h1>
+
+<p align="center">
+  <b>Comparador de precios y nutrición de los supermercados españoles,<br>
+  con app Android propia y sin ningún servidor que mantener.</b>
+</p>
+
+<p align="center">
+  <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-7F52FF?style=flat-square&logo=kotlin&logoColor=white">
+  <img alt="Jetpack Compose" src="https://img.shields.io/badge/Jetpack%20Compose-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white">
+  <img alt="GitHub Actions" src="https://img.shields.io/badge/GitHub%20Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white">
+  <img alt="Licencia MIT" src="https://img.shields.io/badge/licencia-MIT-blue?style=flat-square">
+</p>
+
+<p align="center">
+  <a href="https://github.com/elopositor/EasyCompra/releases/latest"><b>Descargar la APK</b></a> ·
+  <a href="https://github.com/elopositor/EasyCompra-datos"><b>Datos abiertos</b></a>
+</p>
+
+---
 
 Comparador de precios y datos nutricionales de supermercados españoles.
 Reúne el catálogo de alimentación de **Carrefour, Lidl, Mercadona y Dia** en una
 sola lista, lo enriquece con la información nutricional de OpenFoodFacts y lo
 sirve a una app Android nativa desde la que buscar, filtrar y ordenar.
 
-Estado actual: **v2** del repositorio, **v6** de la app Android.
+Estado actual: **v10** de la app Android, publicada como release.
 Datos vivos: ~1.800 productos (Mercadona 706 · Dia 502 · Carrefour 471 · Lidl 121),
 actualizados automáticamente cada día a las 06:00 UTC. La cifra baila entre
 sincronizaciones según lo que devuelva cada fuente.
@@ -19,7 +40,7 @@ GitHub Actions (cron diario 06:00 UTC)
         │
         │  scrapers + APIs públicas + OpenFoodFacts
         ▼
-backend/data/*.json  ──commit──►  histórico versionado en este repo (privado)
+backend/data/*.json  ──commit──►  histórico versionado en este repo
         │
         └──publica──►  github.com/elopositor/EasyCompra-datos  (público)
                                     │
@@ -239,9 +260,10 @@ campos en el backend ya no puede tumbar la app.
   `POST /sync/all` lanza navegadores (Playwright y camoufox) en la máquina que la
   ejecuta. **No exponerla a internet** —ngrok, redirección de puertos en el router—
   sin ponerle antes una clave.
-- **Qué es público y qué no.** El repositorio de código es privado. Solo se publican
-  los JSON de precios en `EasyCompra-datos`: datos de producto de supermercados, sin
-  nada personal.
+- **Qué es público y qué no.** El código es público; el material sensible no está en
+  él. El keystore de firma (`easycompra.jks` y su contraseña) vive fuera del control de
+  versiones y solo existe como secret de Actions. Los JSON de precios se publican en
+  `EasyCompra-datos`: datos de producto de supermercados, sin nada personal.
 - **Credenciales.** El sync publica en el repositorio de datos con una *deploy key*
   de escritura, guardada como secret `DATOS_DEPLOY_KEY` y limitada a ese único
   repositorio. No hay tokens ni claves en el código; `.env` y `*.db` están en
@@ -306,8 +328,9 @@ Y lo que no tenía ninguna de las dos:
 - **Tests de contrato de los scrapers**, que avisen cuando un supermercado cambia su
   HTML o su API en vez de descubrirlo por un JSON vacío, con notificación al fallar el
   workflow.
-- **Firmar la APK de release**: la configuración de Gradle solo define el build `debug`,
-  sin minificar. Requiere un keystore guardado como secret.
+- **Build `release` de verdad**: la firma ya está resuelta con un keystore propio y
+  estable (secrets `ANDROID_KEYSTORE_B64` y `ANDROID_KEYSTORE_PASSWORD`), pero lo que se
+  publica sigue siendo el build `debug`. Falta un `release` con R8 y recursos minificados.
 - Linter y tipos en el backend (`ruff` + `mypy`) y CI que compile la app en cada push.
 - Caché HTTP (ETag / `Cache-Control`) y compresión gzip en `/products`.
 
@@ -315,5 +338,8 @@ Y lo que no tenía ninguna de las dos:
 
 ## Licencia
 
-Proyecto personal, sin licencia definida. Los datos pertenecen a sus respectivos
-supermercados y a OpenFoodFacts (ODbL); el scraping es de uso privado y no comercial.
+El **código** de este repositorio se publica bajo licencia [MIT](LICENSE).
+
+Los **datos** no son míos: pertenecen a sus respectivos supermercados y a OpenFoodFacts
+(ODbL). La recogida es de uso personal y no comercial, se limita a información de producto
+ya visible en sus webs y no incluye ningún dato de personas.
