@@ -32,6 +32,32 @@ sincronizaciones según lo que devuelva cada fuente.
 
 ---
 
+## La app
+
+<table>
+  <tr>
+    <td align="center"><b>Comparador</b></td>
+    <td align="center"><b>Ficha del producto</b></td>
+    <td align="center"><b>Planificador semanal</b></td>
+    <td align="center"><b>Lista de la compra</b></td>
+  </tr>
+  <tr>
+    <td valign="top"><img src="docs/img/productos.jpg" alt="Listado de productos con filtros por supermercado y por NutriScore"></td>
+    <td valign="top"><img src="docs/img/detalle.jpg" alt="Ficha de un producto con precio por kilo, nutrición e ingredientes"></td>
+    <td valign="top"><img src="docs/img/semana.jpg" alt="Planificador semanal con las comidas del día"></td>
+    <td valign="top"><img src="docs/img/lista.jpg" alt="Lista de la compra con el coste estimado por supermercado"></td>
+  </tr>
+</table>
+
+> Estas capturas son de la **v5**, que es la que tiene la interfaz más completa: ficha de
+> detalle, filtros por NutriScore y reparto del gasto por supermercado. Su código fuente se
+> perdió y solo se conserva descompilado en [`referencia/`](referencia/). La versión actual,
+> la v10, reconstruyó despensa, recetario, planificador y lista sobre una base nueva, pero
+> todavía no ha recuperado esas tres cosas — están listadas en
+> [futuras mejoras](#app-android-1).
+
+---
+
 ## Cómo funciona
 
 ```
