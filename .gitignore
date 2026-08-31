@@ -13,5 +13,8 @@ carrefour_api.json
 easycompra.jks
 easycompra.jks.password
 
-# APK generadas: se publican como release, no van al repositorio
+# APK generadas: no se publican en ningun sitio, no van al repositorio
 *.apk
+
+# Copias de seguridad de las APK retiradas de GitHub: solo local
+apks/
