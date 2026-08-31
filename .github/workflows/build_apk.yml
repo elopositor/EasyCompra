@@ -11,8 +11,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Solo lectura: este workflow ya no publica la APK en ninguna parte.
     permissions:
-      contents: write  # Necesario para publicar la release
+      contents: read
 
     steps:
       - name: Checkout repositorio
@@ -73,26 +74,16 @@ jobs:
           cp android/app/build/outputs/apk/debug/app-debug.apk \
              EasyCompra-${{ steps.version.outputs.version }}.apk
 
-      # Queda descargable desde la pestana Actions aunque no se publique release.
-      - name: Subir APK como artefacto
-        uses: actions/upload-artifact@v4
-        with:
-          name: EasyCompra-${{ steps.version.outputs.version }}
-          path: EasyCompra-${{ steps.version.outputs.version }}.apk
-          retention-days: 90
-
-      # La release da un enlace fijo desde el que instalar en el movil.
-      # Se sobreescribe si ya existe una con la misma version.
-      - name: Publicar release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      # NO se publica la APK. En un repositorio publico, tanto una release
+      # como un artefacto de Actions son descargables por cualquiera, y la app
+      # se distribuye solo en privado. Este workflow queda como verificacion de
+      # que el proyecto Android sigue compilando.
+      - name: Comprobar que la APK se ha generado
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          gh release delete "$VERSION" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$VERSION" \
-            "EasyCompra-$VERSION.apk" \
-            --title "EasyCompra $VERSION" \
-            --notes "APK de depuracion, lista para instalar.
+          ls -lh "EasyCompra-$VERSION.apk"
+          echo "Compilacion correcta. La APK no se publica: se genera solo para verificar el build."
 
-          Los datos se descargan de https://github.com/elopositor/EasyCompra-datos
-          y se actualizan solos cada dia. No hace falta arrancar ningun servidor."
+      - name: Descartar la APK
+        if: always()
+        run: rm -f EasyCompra-*.apk
