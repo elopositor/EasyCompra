@@ -18,3 +18,6 @@ easycompra.jks.password
 
 # Copias de seguridad de las APK retiradas de GitHub: solo local
 apks/
+
+# Comprimidos de capturas recibidos por WhatsApp
+WhatsApp*.zip
