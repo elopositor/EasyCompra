@@ -12,3 +12,6 @@ carrefour_api.json
 # Clave de firma de la app: nunca al repositorio
 easycompra.jks
 easycompra.jks.password
+
+# APK generadas: se publican como release, no van al repositorio
+*.apk
