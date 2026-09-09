@@ -1,26 +1,26 @@
 {
-  "updated_at": "2026-09-08T11:09:43+00:00",
+  "updated_at": "2026-09-09T11:20:13+00:00",
   "supermarkets": {
     "carrefour": {
       "file": "carrefour.json",
-      "count": 918,
+      "count": 917,
       "fresh": true
     },
     "dia": {
       "file": "dia.json",
-      "count": 498,
+      "count": 500,
       "fresh": true
     },
     "lidl": {
       "file": "lidl.json",
-      "count": 120,
+      "count": 117,
       "fresh": true
     },
     "mercadona": {
       "file": "mercadona.json",
-      "count": 701,
+      "count": 700,
       "fresh": true
     }
   },
-  "total": 2237
+  "total": 2234
 }
