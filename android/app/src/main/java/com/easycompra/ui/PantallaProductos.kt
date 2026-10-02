@@ -81,7 +81,9 @@ import java.util.Locale
 @Composable
 fun PantallaProductos(vm: MainViewModel, onAbrir: (Product) -> Unit) {
     val s by vm.state.collectAsState()
-    var buscando by remember { mutableStateOf(false) }
+    // Al volver del detalle con una busqueda puesta, la barra sigue abierta:
+    // si no, la lista quedaria filtrada sin que se viera por que.
+    var buscando by remember { mutableStateOf(s.busqueda.isNotEmpty()) }
     var ajustesAbiertos by remember { mutableStateOf(false) }
     val estadoLista = rememberLazyListState()
 
@@ -224,9 +226,9 @@ private fun BarraBusqueda(texto: String, onTexto: (String) -> Unit, onCerrar: ()
         ),
     )
 
-    // Teclado abierto al entrar. Si el campo aun no esta listo, no pasa nada:
-    // se toca y ya.
-    LaunchedEffect(Unit) { runCatching { foco.requestFocus() } }
+    // Teclado abierto al entrar a buscar, no al volver con la busqueda hecha.
+    // Si el campo aun no esta listo, no pasa nada: se toca y ya.
+    LaunchedEffect(Unit) { if (texto.isEmpty()) runCatching { foco.requestFocus() } }
 }
 
 @Composable
@@ -481,8 +483,20 @@ fun euros(v: Double): String = "${decimal(v, 2)} €"
 /** "7,50 €/kg", si el supermercado da precio de referencia. */
 fun precioReferencia(p: Product): String? {
     val precio = p.reference_price ?: return null
-    val unidad = p.reference_format?.trim()?.ifBlank { null } ?: return euros(precio)
+    val unidad = unidadReferencia(p) ?: return euros(precio)
     return "${euros(precio)}/$unidad"
+}
+
+/** Cada supermercado lo escribe a su manera: "KILO", "kg", "LITRO"... */
+fun unidadReferencia(p: Product): String? {
+    val u = p.reference_format?.trim()?.lowercase()?.ifBlank { null } ?: return null
+    return when (u) {
+        "kilo", "kilos", "kilogramo", "kg" -> "kg"
+        "litro", "litros", "l", "lt" -> "l"
+        "unidad", "unidades", "ud", "uds", "u" -> "ud"
+        "docena" -> "docena"
+        else -> u
+    }
 }
 
 /** "2026-08-29T19:55:14+00:00" -> "29/08". Null si no tiene esa forma. */
