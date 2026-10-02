@@ -113,7 +113,8 @@ fun AppEasyCompra() {
                                 Icon(s.icono, contentDescription = s.etiqueta)
                             }
                         },
-                        label = { Text(s.etiqueta, fontSize = 12.sp) },
+                        // En una linea aunque la pantalla sea estrecha: "Productos", no "Product-os".
+                        label = { Text(s.etiqueta, fontSize = 12.sp, maxLines = 1, softWrap = false) },
                     )
                 }
             }
