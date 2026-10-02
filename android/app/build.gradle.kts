@@ -13,8 +13,8 @@ android {
         applicationId = "com.easycompra"
         minSdk = 26
         targetSdk = 34
-        versionCode = 11
-        versionName = "v11"
+        versionCode = 12
+        versionName = "v12"
     }
 
     // Firma propia y estable. Sin ella, cada maquina firma con su certificado

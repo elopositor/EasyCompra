@@ -3,6 +3,7 @@ package com.easycompra.datos
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.easycompra.Product
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -22,6 +23,7 @@ class DatosViewModel(app: Application) : AndroidViewModel(app) {
 
     private val db = BaseDatos.obtener(app)
     private val listaStore = ListaCompraStore(app)
+    private val productosStore = ListaProductosStore(app)
 
     val despensa: StateFlow<List<ProductoConUbicaciones>> =
         db.despensa().productos()
@@ -36,6 +38,9 @@ class DatosViewModel(app: Application) : AndroidViewModel(app) {
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val lista: StateFlow<List<ArticuloLista>> = listaStore.articulos
+
+    /** Productos del catalogo en Mi lista, con su cantidad y precio. */
+    val listaProductos: StateFlow<List<ItemCompra>> = productosStore.items
 
     /** Productos marcados como "necesito comprar" en la despensa. */
     val porComprar: StateFlow<List<ProductoDespensa>> =
@@ -158,6 +163,10 @@ class DatosViewModel(app: Application) : AndroidViewModel(app) {
     fun marcarComprado(id: String, comprado: Boolean) = listaStore.marcar(id, comprado)
     fun borrarDeLista(id: String) = listaStore.borrar(id)
     fun vaciarComprados() = listaStore.vaciarComprados()
+
+    fun anadirProducto(producto: Product) = productosStore.anadir(producto)
+    fun cambiarCantidad(clave: String, cantidad: Int) = productosStore.cambiarCantidad(clave, cantidad)
+    fun vaciarListaProductos() = productosStore.vaciar()
 
     /** Nombres de la despensa, para sugerir al escribir un ingrediente. */
     val nombresDespensa: StateFlow<List<String>> = db.despensa().productos()

@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.easycompra.datos.FavoritosStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
@@ -19,10 +20,13 @@ import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 
+/** Pestanas de orden de la v5, con la unidad que se ensena en cada tarjeta. */
 enum class Orden(val etiqueta: String) {
+    AZUCARES("Azúcares"),
+    CALORIAS("Calorías"),
+    GRASAS("Grasas"),
+    PROTEINAS("Proteínas"),
     PRECIO("Precio"),
-    AZUCARES("Azucares"),
-    NOMBRE("Nombre"),
 }
 
 data class UiState(
@@ -36,8 +40,12 @@ data class UiState(
     val hayCatalogo: Boolean = false,
     val busqueda: String = "",
     val supermercado: String? = null,
-    val orden: Orden = Orden.PRECIO,
+    val orden: Orden = Orden.AZUCARES,
     val sinNata: Boolean = false,
+    /** 'A'..'E' o null para todos. */
+    val nutri: Char? = null,
+    val soloFavoritos: Boolean = false,
+    val favoritos: Set<String> = emptySet(),
     val origen: Origen = Origen.GITHUB,
     val servidor: String = MainViewModel.URL_POR_DEFECTO,
     val actualizado: String? = null,
@@ -47,7 +55,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
         const val URL_POR_DEFECTO = "http://192.168.1.131:8123"
-        val SUPERMERCADOS = listOf(null, "Carrefour", "Lidl", "Mercadona", "Dia")
+        val SUPERMERCADOS = listOf(null, "Mercadona", "Dia", "Carrefour", "Lidl")
 
         /** Espera tras la ultima tecla antes de buscar. */
         private const val RETARDO_BUSQUEDA_MS = 250L
@@ -55,6 +63,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val prefs = app.getSharedPreferences("easycompra", Context.MODE_PRIVATE)
     private val repo = Repositorio(app.cacheDir)
+    private val favoritosStore = FavoritosStore(app)
 
     private val _state = MutableStateFlow(
         UiState(
@@ -62,6 +71,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 Origen.valueOf(prefs.getString("origen", Origen.GITHUB.name)!!)
             }.getOrDefault(Origen.GITHUB),
             servidor = prefs.getString("servidor", URL_POR_DEFECTO) ?: URL_POR_DEFECTO,
+            favoritos = favoritosStore.claves.value,
         )
     )
     val state: StateFlow<UiState> = _state.asStateFlow()
@@ -103,6 +113,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setSinNata(v: Boolean) {
         _state.update { it.copy(sinNata = v) }
         programarFiltrado(0)
+    }
+
+    fun setNutri(nota: Char?) {
+        _state.update { it.copy(nutri = nota) }
+        programarFiltrado(0)
+    }
+
+    fun setSoloFavoritos(v: Boolean) {
+        _state.update { it.copy(soloFavoritos = v) }
+        programarFiltrado(0)
+    }
+
+    fun alternarFavorito(p: Product) {
+        favoritosStore.alternar(p)
+        _state.update { it.copy(favoritos = favoritosStore.claves.value) }
+        if (_state.value.soloFavoritos) programarFiltrado(0)
     }
 
     fun setSupermercado(s: String?) {
@@ -184,12 +210,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun filtrar(entradas: List<Busqueda.Entrada>, s: UiState): Busqueda.Resultado {
         val candidatas = entradas.filter { e ->
             (s.supermercado == null || e.producto.supermarket.equals(s.supermercado, ignoreCase = true)) &&
-                (!s.sinNata || !e.producto.contains_nata)
+                (!s.sinNata || !e.producto.contains_nata) &&
+                (s.nutri == null || NutriScore.nota(e.producto) == s.nutri) &&
+                (!s.soloFavoritos || clave(e.producto) in s.favoritos)
         }
+        // Lo que no tiene el dato va al final. Proteinas: de mas a menos.
         val orden: Comparator<Product> = when (s.orden) {
-            Orden.PRECIO -> compareBy { it.unit_price ?: Double.MAX_VALUE }
             Orden.AZUCARES -> compareBy { it.sugars_100g ?: Double.MAX_VALUE }
-            Orden.NOMBRE -> compareBy { it.name.lowercase() }
+            Orden.CALORIAS -> compareBy { it.energy_kcal_100g ?: Double.MAX_VALUE }
+            Orden.GRASAS -> compareBy { it.fat_100g ?: Double.MAX_VALUE }
+            Orden.PROTEINAS -> compareByDescending { it.proteins_100g ?: -1.0 }
+            Orden.PRECIO -> compareBy { it.unit_price ?: Double.MAX_VALUE }
         }
         val resultado = Busqueda.buscar(candidatas, s.busqueda, orden)
         // Sin duplicados: la lista se pinta con clave por producto y dos claves
