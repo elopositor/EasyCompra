@@ -54,6 +54,9 @@ private val Esquema = lightColorScheme(
     secondary = Colores.VerdeSecundario,
     background = Colores.Fondo,
     surface = Color.White,
+    // Sin el tinte verdoso que Material pone a las tarjetas con sombra: en la
+    // v5 eran blancas.
+    surfaceTint = Color.Transparent,
 )
 
 @Composable

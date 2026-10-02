@@ -98,7 +98,7 @@ fun PantallaDetalle(
                 Cifra(p.unit_price?.let { euros(it) } ?: "—", "precio", Colores.Verde)
                 p.reference_price?.let { ref ->
                     Spacer(Modifier.width(36.dp))
-                    val unidad = p.reference_format?.trim()?.ifBlank { null }
+                    val unidad = unidadReferencia(p)
                     Cifra(euros(ref), if (unidad != null) "por $unidad" else "referencia", Color(0xFF1F1F1F))
                 }
             }
