@@ -140,29 +140,28 @@ class Repositorio(private val dirCache: File) {
 
     private val ficheroCache = File(dirCache, "productos.json")
 
-    suspend fun cargar(origen: Origen, servidor: String, supermercado: String?): Datos {
+    /** Siempre el catalogo completo: el filtro por supermercado se hace en el movil. */
+    suspend fun cargar(origen: Origen, servidor: String): Datos {
         val datos = when (origen) {
-            Origen.GITHUB -> desdeGitHub(supermercado)
-            Origen.SERVIDOR -> desdeServidor(servidor, supermercado)
+            Origen.GITHUB -> desdeGitHub()
+            Origen.SERVIDOR -> desdeServidor(servidor)
         }
-        guardarCache(datos, supermercado)
+        guardarCache(datos)
         return datos
     }
 
-    private suspend fun desdeGitHub(supermercado: String?): Datos = coroutineScope {
+    private suspend fun desdeGitHub(): Datos = coroutineScope {
         val api = ApiFactory.publica()
 
         // El indice dice que ficheros hay y de cuando son. Si no se puede leer,
         // se tira de la lista conocida: es preferible a no mostrar nada.
         val indice = runCatching { api.indice(ApiFactory.BASE_DATOS + "index.json") }.getOrNull()
 
-        val nombres = when {
-            supermercado != null -> listOf(supermercado.lowercase())
-            indice != null && indice.supermarkets.isNotEmpty() -> indice.supermarkets.keys.toList()
-            else -> ApiFactory.FICHEROS
-        }
+        val nombres = indice?.supermarkets?.keys?.toList()?.takeIf { it.isNotEmpty() }
+            ?: ApiFactory.FICHEROS
 
-        // Los ficheros se bajan a la vez, no uno detras de otro.
+        // Los ficheros se bajan a la vez, no uno detras de otro. Si uno falla,
+        // se muestran los demas.
         val descargas = nombres.map { nombre ->
             async(Dispatchers.IO) {
                 runCatching { api.productos("${ApiFactory.BASE_DATOS}$nombre.json") }
@@ -179,38 +178,34 @@ class Repositorio(private val dirCache: File) {
         Datos(productos = productos, actualizado = indice?.updated_at)
     }
 
-    private suspend fun desdeServidor(url: String, supermercado: String?): Datos =
+    private suspend fun desdeServidor(url: String): Datos =
         withContext(Dispatchers.IO) {
-            Datos(productos = ApiFactory.servidor(url).products(supermercado))
+            Datos(productos = ApiFactory.servidor(url).products(null))
         }
 
-    private fun guardarCache(datos: Datos, supermercado: String?) {
+    /** En disco y fuera del hilo de la interfaz: son un par de megas de JSON. */
+    private suspend fun guardarCache(datos: Datos) = withContext(Dispatchers.IO) {
         runCatching {
             dirCache.mkdirs()
-            val cache = Cache(
-                productos = datos.productos,
-                actualizado = datos.actualizado ?: "",
-                supermercado = supermercado,
-            )
+            val cache = Cache(productos = datos.productos, actualizado = datos.actualizado ?: "")
             ficheroCache.writeText(ApiFactory.json.encodeToString(cache))
         }
     }
 
     /** Ultima descarga correcta, para cuando no hay red. */
-    fun leerCache(supermercado: String?): Datos? = runCatching {
-        if (!ficheroCache.exists()) return null
-        val cache = ApiFactory.json.decodeFromString<Cache>(ficheroCache.readText())
-        if (cache.productos.isEmpty()) return null
-        // La copia guardada corresponde a otra seleccion de supermercado: solo
-        // sirve si guardamos el catalogo completo, del que se puede filtrar.
-        if (cache.supermercado != supermercado && cache.supermercado != null) return null
-        Datos(
-            productos = if (supermercado == null) cache.productos
-            else cache.productos.filter { it.supermarket.equals(supermercado, true) },
-            actualizado = cache.actualizado.ifBlank { null },
-            deCache = true,
-        )
-    }.getOrNull()
+    suspend fun leerCache(): Datos? = withContext(Dispatchers.IO) {
+        runCatching {
+            if (!ficheroCache.exists()) return@runCatching null
+            val cache = ApiFactory.json.decodeFromString<Cache>(ficheroCache.readText())
+            // Las versiones anteriores podian guardar un solo supermercado: se
+            // aprovecha igual, mejor eso que nada.
+            Datos(
+                productos = cache.productos,
+                actualizado = cache.actualizado.ifBlank { null },
+                deCache = true,
+            ).takeIf { it.productos.isNotEmpty() }
+        }.getOrNull()
+    }
 }
 
 enum class Origen { GITHUB, SERVIDOR }

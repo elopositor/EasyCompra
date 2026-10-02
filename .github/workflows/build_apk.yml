@@ -25,8 +25,8 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Configurar Android SDK
-        uses: android-actions/setup-android@v3
+      # El runner ya trae el SDK de Android. android-actions/setup-android
+      # fallaba al intentar instalar el paquete 'tools', que ya no existe.
 
       - name: Cache de Gradle
         uses: actions/cache@v4

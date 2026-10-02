@@ -18,12 +18,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Kitchen
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -48,6 +52,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,7 +63,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -73,7 +80,7 @@ import com.easycompra.ui.PantallaPlan
 import com.easycompra.ui.PantallaRecetas
 import java.util.Locale
 
-const val VERSION_APP = "v10"
+const val VERSION_APP = "v11"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -105,6 +112,8 @@ private enum class Seccion(val etiqueta: String) {
 fun AppEasyCompra() {
     var seccion by remember { mutableStateOf(Seccion.BUSCAR) }
     val datos: DatosViewModel = viewModel()
+    val contexto = LocalContext.current
+    var informeFallo by remember { mutableStateOf(RegistroFallos.leer(contexto)) }
 
     val despensa by datos.despensa.collectAsState()
     val recetas by datos.recetas.collectAsState()
@@ -135,6 +144,42 @@ fun AppEasyCompra() {
             }
         }
     }
+
+    // Informe del ultimo cierre inesperado, si lo hubo.
+    val informe = informeFallo
+    if (informe != null) {
+        AlertDialog(
+            onDismissRequest = { informeFallo = null },
+            title = { Text("La app se cerro la ultima vez") },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 320.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(informe, fontSize = 11.sp)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val envio = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_SUBJECT, "EasyCompra: informe de cierre")
+                        putExtra(Intent.EXTRA_TEXT, informe)
+                    }
+                    runCatching {
+                        contexto.startActivity(Intent.createChooser(envio, "Enviar informe"))
+                    }
+                }) { Text("Enviar") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    RegistroFallos.borrar(contexto)
+                    informeFallo = null
+                }) { Text("Descartar") }
+            },
+        )
+    }
 }
 
 private fun iconoDe(seccion: Seccion): ImageVector = when (seccion) {
@@ -149,13 +194,18 @@ private fun iconoDe(seccion: Seccion): ImageVector = when (seccion) {
 @Composable
 fun Pantalla(vm: MainViewModel = viewModel()) {
     val s by vm.state.collectAsState()
-    val contexto = LocalContext.current
     var ajustesAbiertos by remember { mutableStateOf(false) }
-    var informeFallo by remember { mutableStateOf(RegistroFallos.leer(contexto)) }
+    val teclado = LocalSoftwareKeyboardController.current
+    val estadoLista = rememberLazyListState()
 
-    // La lista ya viene filtrada y ordenada del ViewModel, fuera del hilo de la
-    // interfaz: aqui no se hace ningun trabajo por cada tecla pulsada.
+    // La lista ya viene buscada, filtrada y ordenada del ViewModel, fuera del
+    // hilo de la interfaz: aqui no se hace ningun trabajo por cada tecla.
     val visibles = s.visibles
+
+    // Resultados nuevos: se vuelve arriba para verlos desde el primero.
+    LaunchedEffect(visibles) {
+        if (visibles.isNotEmpty()) runCatching { estadoLista.scrollToItem(0) }
+    }
 
     Scaffold(
         topBar = {
@@ -182,7 +232,16 @@ fun Pantalla(vm: MainViewModel = viewModel()) {
                 onValueChange = vm::setBusqueda,
                 label = { Text("Buscar producto") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (s.busqueda.isNotEmpty()) {
+                        IconButton(onClick = { vm.setBusqueda("") }) {
+                            Icon(Icons.Default.Clear, contentDescription = "Borrar busqueda")
+                        }
+                    }
+                },
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { teclado?.hide() }),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 6.dp),
@@ -247,7 +306,14 @@ fun Pantalla(vm: MainViewModel = viewModel()) {
                     }
                 }
 
-                visibles.isEmpty() -> Caja { Text("Sin resultados") }
+                visibles.isEmpty() -> Caja {
+                    Text(
+                        if (s.busqueda.isBlank()) "Sin resultados"
+                        else "Nada parecido a \"${s.busqueda.trim()}\"",
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                    )
+                }
 
                 else -> {
                     val aviso = s.aviso
@@ -259,6 +325,14 @@ fun Pantalla(vm: MainViewModel = viewModel()) {
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                         )
                     }
+                    if (s.aproximado) {
+                        Text(
+                            "No hay nada con \"${s.busqueda.trim()}\". Lo mas parecido:",
+                            fontSize = 12.sp,
+                            color = Color(0xFF8A5A00),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                        )
+                    }
                     Text(
                         listOfNotNull(
                             "${visibles.size} productos",
@@ -268,7 +342,7 @@ fun Pantalla(vm: MainViewModel = viewModel()) {
                         color = Color.Gray,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
                     )
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    LazyColumn(state = estadoLista, modifier = Modifier.fillMaxSize()) {
                         // Con clave estable, al filtrar se reutilizan las filas
                         // que ya estaban en pantalla en vez de rehacerlas todas.
                         items(visibles, key = { clave(it) }) { p -> Tarjeta(p) }
@@ -335,41 +409,6 @@ fun Pantalla(vm: MainViewModel = viewModel()) {
         )
     }
 
-    // Informe del ultimo cierre inesperado, si lo hubo.
-    val informe = informeFallo
-    if (informe != null) {
-        AlertDialog(
-            onDismissRequest = { informeFallo = null },
-            title = { Text("La app se cerro la ultima vez") },
-            text = {
-                Column(
-                    modifier = Modifier
-                        .heightIn(max = 320.dp)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    Text(informe, fontSize = 11.sp)
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val envio = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(Intent.EXTRA_SUBJECT, "EasyCompra: informe de cierre")
-                        putExtra(Intent.EXTRA_TEXT, informe)
-                    }
-                    runCatching {
-                        contexto.startActivity(Intent.createChooser(envio, "Enviar informe"))
-                    }
-                }) { Text("Enviar") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    RegistroFallos.borrar(contexto)
-                    informeFallo = null
-                }) { Text("Descartar") }
-            },
-        )
-    }
 }
 
 @Composable
