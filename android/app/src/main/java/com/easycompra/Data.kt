@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import okhttp3.Cache as CacheHttp
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
@@ -100,7 +101,7 @@ object ApiFactory {
     const val BASE_DATOS =
         "https://raw.githubusercontent.com/elopositor/EasyCompra-datos/main/"
 
-    val FICHEROS = listOf("alimerka", "carrefour", "dia", "lidl", "mercadona")
+    val FICHEROS = listOf("alimerka", "carrefour", "dia", "froiz", "lidl", "mercadona")
 
     val json = Json {
         ignoreUnknownKeys = true   // campos nuevos en el origen: se ignoran
@@ -111,10 +112,24 @@ object ApiFactory {
         isLenient = true
     }
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .build()
+    /**
+     * Con seis supermercados el catalogo son varios megas. Con cache HTTP, si
+     * los datos no han cambiado desde la ultima vez (se publican una vez al
+     * dia) GitHub contesta "sin cambios" y no se vuelven a bajar.
+     */
+    private var cache: CacheHttp? = null
+
+    fun usarCache(dir: File) {
+        if (cache == null) cache = CacheHttp(File(dir, "http"), 40L * 1024 * 1024)
+    }
+
+    private val client by lazy {
+        OkHttpClient.Builder()
+            .cache(cache)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .build()
+    }
 
     private fun retrofit(baseUrl: String): Retrofit = Retrofit.Builder()
         .baseUrl(if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/")
@@ -137,6 +152,10 @@ object ApiFactory {
  * disponible como origen alternativo desde Ajustes.
  */
 class Repositorio(private val dirCache: File) {
+
+    init {
+        ApiFactory.usarCache(dirCache)
+    }
 
     private val ficheroCache = File(dirCache, "productos.json")
 
