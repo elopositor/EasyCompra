@@ -101,7 +101,8 @@ object ApiFactory {
     const val BASE_DATOS =
         "https://raw.githubusercontent.com/elopositor/EasyCompra-datos/main/"
 
-    val FICHEROS = listOf("alimerka", "carrefour", "dia", "froiz", "lidl", "mercadona")
+    /** Lo publicado en GitHub. Froiz no esta: se baja desde el movil (Froiz.kt). */
+    val FICHEROS = listOf("alimerka", "carrefour", "dia", "lidl", "mercadona")
 
     val json = Json {
         ignoreUnknownKeys = true   // campos nuevos en el origen: se ignoran
@@ -142,6 +143,9 @@ object ApiFactory {
 
     fun publica(): DatosPublicosApi =
         retrofit(BASE_DATOS).create(DatosPublicosApi::class.java)
+
+    fun froiz(): Froiz.Api =
+        retrofit("https://servicios.froiz.com/").create(Froiz.Api::class.java)
 }
 
 /**
@@ -160,17 +164,19 @@ class Repositorio(private val dirCache: File) {
     private val ficheroCache = File(dirCache, "productos.json")
 
     /** Siempre el catalogo completo: el filtro por supermercado se hace en el movil. */
-    suspend fun cargar(origen: Origen, servidor: String): Datos {
+    suspend fun cargar(origen: Origen, servidor: String, forzar: Boolean = false): Datos {
         val datos = when (origen) {
-            Origen.GITHUB -> desdeGitHub()
+            Origen.GITHUB -> desdeGitHub(forzar)
             Origen.SERVIDOR -> desdeServidor(servidor)
         }
         guardarCache(datos)
         return datos
     }
 
-    private suspend fun desdeGitHub(): Datos = coroutineScope {
+    private suspend fun desdeGitHub(forzar: Boolean): Datos = coroutineScope {
         val api = ApiFactory.publica()
+        // Froiz va por su cuenta, a la vez que el resto (ver Froiz.kt).
+        val froiz = async { runCatching { Froiz.productos(dirCache, forzar) }.getOrDefault(emptyList()) }
 
         // El indice dice que ficheros hay y de cuando son. Si no se puede leer,
         // se tira de la lista conocida: es preferible a no mostrar nada.
@@ -190,7 +196,7 @@ class Repositorio(private val dirCache: File) {
                     .getOrDefault(emptyList())
             }
         }
-        val productos = descargas.awaitAll().flatten()
+        val productos = descargas.awaitAll().flatten() + froiz.await()
 
         if (productos.isEmpty()) {
             // Sin datos y sin excepcion: mejor fallar que ensenar una lista vacia

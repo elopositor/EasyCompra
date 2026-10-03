@@ -134,7 +134,7 @@ fun PantallaProductos(
             BarraVerde(
                 titulo = "EasyCompra",
                 acciones = {
-                    IconButton(onClick = { vm.cargar() }) {
+                    IconButton(onClick = { vm.cargar(forzar = true) }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Sincronizar")
                     }
                     IconButton(onClick = { buscando = true }) {

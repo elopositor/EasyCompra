@@ -168,7 +168,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(servidor = url) }
     }
 
-    fun cargar() {
+    /** [forzar]: tambien Froiz, aunque su copia guardada sea de hace poco. */
+    fun cargar(forzar: Boolean = false) {
         // Pulsar recargar varias veces no lanza varias descargas a la vez.
         trabajoCarga?.cancel()
         _state.update { it.copy(cargando = true, error = null, aviso = null) }
@@ -176,7 +177,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         trabajoCarga = viewModelScope.launch(sinCierres) {
             var aviso: String? = null
             val datos = try {
-                repo.cargar(actual.origen, actual.servidor)
+                repo.cargar(actual.origen, actual.servidor, forzar)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
