@@ -18,7 +18,7 @@ import java.text.Normalizer
 object Busqueda {
 
     /** Un producto con sus palabras ya normalizadas, preparado para buscar. */
-    class Entrada(val producto: Product, val palabras: Set<String>)
+    class Entrada(val producto: Product, val palabras: Set<String>, val categoria: String)
 
     class Resultado(
         val productos: List<Product>,
@@ -49,7 +49,7 @@ object Busqueda {
 
     /** Se calcula una vez por catalogo, no en cada busqueda. */
     fun indexar(productos: List<Product>): List<Entrada> = productos.map { p ->
-        Entrada(p, (palabras(p.name) + palabras(p.brand) + palabras(p.supermarket)).toSet())
+        Entrada(p, (palabras(p.name) + palabras(p.brand) + palabras(p.supermarket)).toSet(), Categorias.de(p))
     }
 
     /**

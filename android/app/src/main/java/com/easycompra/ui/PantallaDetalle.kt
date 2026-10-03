@@ -44,7 +44,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.easycompra.NutriScore
 import com.easycompra.Product
 
 @Composable
@@ -81,10 +80,7 @@ fun PantallaDetalle(
             }
             Spacer(Modifier.height(16.dp))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (p.supermarket.isNotBlank()) EtiquetaSupermercado(p.supermarket, grande = true)
-                EtiquetaNutri(NutriScore.nota(p), grande = true)
-            }
+            if (p.supermarket.isNotBlank()) EtiquetaSupermercado(p.supermarket, grande = true)
             Spacer(Modifier.height(14.dp))
 
             Text(p.name, fontSize = 22.sp, fontWeight = FontWeight.Bold)

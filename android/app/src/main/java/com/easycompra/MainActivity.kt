@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -30,8 +31,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -49,7 +52,7 @@ import com.easycompra.ui.PantallaProductos
 import com.easycompra.ui.PantallaRecetas
 import com.easycompra.ui.TemaEasyCompra
 
-const val VERSION_APP = "v12"
+const val VERSION_APP = "v13"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -75,6 +78,11 @@ private enum class Seccion(val etiqueta: String, val icono: ImageVector) {
 fun AppEasyCompra() {
     var seccion by remember { mutableStateOf(Seccion.PRODUCTOS) }
     var detalle by remember { mutableStateOf<Product?>(null) }
+
+    // Aqui y no dentro de Productos: al abrir un producto esa pantalla se va,
+    // y al volver la lista tiene que seguir por donde estaba.
+    val estadoListaProductos = rememberLazyListState()
+    var resultadoVisto by rememberSaveable { mutableIntStateOf(-1) }
 
     val catalogo: MainViewModel = viewModel()
     val datos: DatosViewModel = viewModel()
@@ -130,7 +138,14 @@ fun AppEasyCompra() {
                     onAnadirALista = { datos.anadirProducto(abierto) },
                     onFavorito = { catalogo.alternarFavorito(abierto) },
                 )
-                seccion == Seccion.PRODUCTOS -> PantallaProductos(catalogo, onAbrir = { detalle = it })
+                seccion == Seccion.PRODUCTOS -> PantallaProductos(
+                    vm = catalogo,
+                    estadoLista = estadoListaProductos,
+                    vistoId = resultadoVisto,
+                    onVisto = { resultadoVisto = it },
+                    onAbrir = { detalle = it },
+                    onAnadirALista = { datos.anadirProducto(it) },
+                )
                 seccion == Seccion.LISTA -> PantallaLista(datos, lista, listaProductos)
                 seccion == Seccion.DESPENSA -> PantallaDespensa(datos, despensa)
                 seccion == Seccion.RECETAS -> PantallaRecetas(datos, recetas, despensa)
