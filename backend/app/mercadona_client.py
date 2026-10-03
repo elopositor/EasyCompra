@@ -18,6 +18,13 @@ def get_category_products(category_id: int) -> list[dict]:
     return products
 
 
+def get_category_tree() -> list[dict]:
+    """Primer nivel con sus subcategorias: [{id, name, categories: [...]}]."""
+    resp = _client.get("/categories/")
+    resp.raise_for_status()
+    return resp.json().get("results", [])
+
+
 def get_product_detail(product_id: str) -> dict:
     resp = _client.get(f"/products/{product_id}/")
     resp.raise_for_status()

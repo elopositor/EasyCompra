@@ -22,6 +22,9 @@ FOOD_QUERIES = [
     "cereales", "avena", "legumbres", "atun", "frutos secos",
     "pasta", "arroz", "conservas", "embutido", "mantequilla",
     "proteinas", "pollo", "salmon", "brocoli", "espinacas",
+    # Fruta y verdura: sin estas busquedas no salian ni la lechuga.
+    "fruta", "verdura", "lechuga", "ensalada", "tomate", "manzana",
+    "platano", "naranja", "patata", "cebolla", "zanahoria", "pimiento",
 ]
 
 
@@ -84,18 +87,61 @@ async def sync_lidl() -> int:
     return _write("lidl", await scrape_lidl(FOOD_QUERIES))
 
 
+# Fichas nuevas de Mercadona por sync: cada una cuesta ~1 s (ficha + Open Food
+# Facts). Con el catalogo entero (~3.500) se pasaria del tiempo del workflow,
+# asi que se completan poco a poco: lo ya conocido se reaprovecha.
+MAX_FICHAS_MERCADONA = 400
+
+# Lo que solo trae la ficha y no cambia de un dia para otro.
+_CAMPOS_FICHA = (
+    "brand", "photo_url", "ean", "ingredients", "allergens", "contains_nata",
+    "energy_kcal_100g", "fat_100g", "saturated_fat_100g", "carbohydrates_100g",
+    "sugars_100g", "proteins_100g", "salt_100g",
+)
+
+
+def _anteriores(name: str) -> dict[str, dict]:
+    path = DATA_DIR / f"{name}.json"
+    try:
+        return {p["id"]: p for p in json.loads(path.read_text(encoding="utf-8"))}
+    except Exception:
+        return {}
+
+
 def sync_mercadona() -> int:
-    from . import normalize
+    from . import mercadona_client, normalize
+
+    anteriores = _anteriores("mercadona")
     products: dict[str, dict] = {}
-    for category_id in normalize.MERCADONA_CATEGORIES:
+    fichas = 0
+    for category_id in normalize.get_mercadona_subcategorias():
         try:
-            nuevos = _dedupe(normalize.get_mercadona_category(category_id))
+            listado = mercadona_client.get_category_products(category_id)
         except Exception as e:
             print(f"[mercadona] categoria {category_id}: {e}")
             continue
         before = len(products)
-        products.update({k: v for k, v in nuevos.items() if k not in products})
+        for summary in listado:
+            p = normalize.mercadona_desde_listado(summary)
+            if p["id"] in products:
+                continue
+            previo = anteriores.get(p["id"])
+            # Los JSON de antes de este cambio no llevan "con_ficha" pero todos
+            # se hicieron con ficha.
+            if previo and previo.get("con_ficha", True):
+                # Precio de hoy, ficha de antes.
+                p.update({k: previo.get(k) for k in _CAMPOS_FICHA})
+                p["con_ficha"] = True
+            elif fichas < MAX_FICHAS_MERCADONA:
+                try:
+                    p = normalize.build_mercadona_product(summary)
+                    fichas += 1
+                except Exception as e:
+                    print(f"[mercadona] ficha {p['id']}: {e}")
+            products[p["id"]] = p
         print(f"[mercadona] categoria {category_id}: +{len(products) - before} nuevos (total {len(products)})")
+    sin = sum(1 for p in products.values() if not p.get("con_ficha"))
+    print(f"[mercadona] {fichas} fichas nuevas; {sin} productos aun sin ficha (se completan en los proximos syncs)")
     return _write("mercadona", list(products.values()))
 
 

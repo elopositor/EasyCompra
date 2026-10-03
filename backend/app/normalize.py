@@ -115,6 +115,51 @@ def coerce_types(product: dict) -> dict:
     return clean
 
 
+# Secciones de primer nivel que no son comida: bodega (alcohol), cosmetica,
+# parafarmacia, bebe y limpieza. Todo lo demas entra, fruta y verdura incluida.
+MERCADONA_SIN_COMIDA = {19, 20, 21, 22, 23, 24, 26}
+
+
+def get_mercadona_subcategorias() -> list[int]:
+    """Todas las subcategorias de comida, leidas del arbol de la tienda.
+
+    Primero las de MERCADONA_CATEGORIES, para que si hay que racionar las
+    fichas (ver sync_to_json) sean las de siempre las que no se queden sin.
+    """
+    todas = [
+        sub["id"]
+        for seccion in mercadona_client.get_category_tree()
+        if seccion.get("id") not in MERCADONA_SIN_COMIDA
+        for sub in seccion.get("categories", [])
+    ]
+    return MERCADONA_CATEGORIES + [c for c in todas if c not in MERCADONA_CATEGORIES]
+
+
+def mercadona_desde_listado(summary: dict) -> dict:
+    """Producto con lo que trae el listado de la categoria, sin pedir su ficha:
+    nombre, precio, precio por kilo, foto y enlace. Sin marca ni nutricion."""
+    precios = summary.get("price_instructions") or {}
+    external_id = str(summary["id"])
+    return {
+        "supermarket": "Mercadona",
+        "external_id": external_id,
+        "id": f"mercadona_{external_id}",
+        "name": summary.get("display_name"),
+        "brand": None,
+        "photo_url": summary.get("thumbnail"),
+        "unit_price": precios.get("unit_price"),
+        "reference_price": precios.get("reference_price"),
+        "reference_format": precios.get("reference_format"),
+        "ean": None,
+        "ingredients": None,
+        "allergens": None,
+        "contains_nata": False,
+        "share_url": summary.get("share_url"),
+        **NUTRITION_DEFAULTS,
+        "con_ficha": False,
+    }
+
+
 def build_mercadona_product(summary: dict) -> dict:
     detail = mercadona_client.get_product_detail(summary["id"])
     ean = detail.get("ean")
@@ -143,6 +188,7 @@ def build_mercadona_product(summary: dict) -> dict:
         "contains_nata": _contains_nata(ingredients),
         "share_url": detail.get("share_url"),
         **nutrition,
+        "con_ficha": True,
     }
 
 
