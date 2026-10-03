@@ -175,8 +175,11 @@ def _parse_dia_nutrition(nutritional_info: dict | None) -> dict:
     return nutrition
 
 
-def build_dia_product(item: dict) -> dict:
-    detail = dia_client.get_product_detail(item["object_id"])
+def build_dia_product(item: dict, detail: dict | None = None) -> dict:
+    """item: resultado de la busqueda. detail: su ficha, si ya se ha descargado
+    (el sync la trae desde el navegador; el servidor la pide aqui)."""
+    if detail is None:
+        detail = dia_client.get_product_detail(item["object_id"])
     ingredients = _strip_html(detail.get("ingredients", {}).get("text"))
     images = detail.get("images") or []
     external_id = str(detail["sku_id"])

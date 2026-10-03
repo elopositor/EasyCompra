@@ -3,77 +3,56 @@ package com.easycompra
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Kitchen
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.easycompra.datos.DatosViewModel
+import com.easycompra.ui.Colores
 import com.easycompra.ui.PantallaDespensa
+import com.easycompra.ui.PantallaDetalle
 import com.easycompra.ui.PantallaLista
 import com.easycompra.ui.PantallaPlan
+import com.easycompra.ui.PantallaProductos
 import com.easycompra.ui.PantallaRecetas
-import java.util.Locale
+import com.easycompra.ui.TemaEasyCompra
 
-const val VERSION_APP = "v10"
+const val VERSION_APP = "v14"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -81,258 +60,98 @@ class MainActivity : ComponentActivity() {
         RegistroFallos.instalar(this)
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme(colorScheme = lightColorScheme()) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background,
-                ) {
-                    AppEasyCompra()
-                }
-            }
+            TemaEasyCompra { AppEasyCompra() }
         }
     }
 }
 
-private enum class Seccion(val etiqueta: String) {
-    BUSCAR("Buscar"),
-    DESPENSA("Despensa"),
-    RECETAS("Recetas"),
-    PLAN("Semana"),
-    LISTA("Lista"),
+/** Las cinco secciones de la v5, en su mismo orden. */
+private enum class Seccion(val etiqueta: String, val icono: ImageVector) {
+    PRODUCTOS("Productos", Icons.Default.Home),
+    LISTA("Mi lista", Icons.Default.ShoppingCart),
+    DESPENSA("Despensa", Icons.Default.Kitchen),
+    RECETAS("Recetas", Icons.AutoMirrored.Filled.MenuBook),
+    SEMANA("Semana", Icons.Default.CalendarMonth),
 }
 
 @Composable
 fun AppEasyCompra() {
-    var seccion by remember { mutableStateOf(Seccion.BUSCAR) }
-    val datos: DatosViewModel = viewModel()
+    var seccion by remember { mutableStateOf(Seccion.PRODUCTOS) }
+    var detalle by remember { mutableStateOf<Product?>(null) }
 
+    // Aqui y no dentro de Productos: al abrir un producto esa pantalla se va,
+    // y al volver la lista tiene que seguir por donde estaba.
+    val estadoListaProductos = rememberLazyListState()
+    var resultadoVisto by rememberSaveable { mutableIntStateOf(-1) }
+
+    val catalogo: MainViewModel = viewModel()
+    val datos: DatosViewModel = viewModel()
+    val contexto = LocalContext.current
+    var informeFallo by remember { mutableStateOf(RegistroFallos.leer(contexto)) }
+
+    val estado by catalogo.state.collectAsState()
     val despensa by datos.despensa.collectAsState()
     val recetas by datos.recetas.collectAsState()
     val plan by datos.plan.collectAsState()
     val lista by datos.lista.collectAsState()
+    val listaProductos by datos.listaProductos.collectAsState()
+
+    val enLista = listaProductos.size + lista.count { !it.comprado }
+
+    // Atras desde el detalle vuelve a la lista de productos.
+    BackHandler(enabled = detalle != null) { detalle = null }
 
     Scaffold(
+        containerColor = Colores.Fondo,
         bottomBar = {
             NavigationBar {
                 Seccion.entries.forEach { s ->
                     NavigationBarItem(
                         selected = seccion == s,
-                        onClick = { seccion = s },
-                        icon = { Icon(iconoDe(s), contentDescription = s.etiqueta) },
-                        label = { Text(s.etiqueta, fontSize = 10.sp) },
+                        onClick = {
+                            seccion = s
+                            detalle = null
+                        },
+                        icon = {
+                            if (s == Seccion.LISTA && enLista > 0) {
+                                BadgedBox(badge = { Badge { Text("$enLista") } }) {
+                                    Icon(s.icono, contentDescription = s.etiqueta)
+                                }
+                            } else {
+                                Icon(s.icono, contentDescription = s.etiqueta)
+                            }
+                        },
+                        // En una linea aunque la pantalla sea estrecha: "Productos", no "Product-os".
+                        label = { Text(s.etiqueta, fontSize = 12.sp, maxLines = 1, softWrap = false) },
                     )
                 }
             }
         },
     ) { padding ->
-        Box(Modifier.padding(padding)) {
-            when (seccion) {
-                Seccion.BUSCAR -> Pantalla()
-                Seccion.DESPENSA -> PantallaDespensa(datos, despensa)
-                Seccion.RECETAS -> PantallaRecetas(datos, recetas, despensa)
-                Seccion.PLAN -> PantallaPlan(datos, plan, recetas)
-                Seccion.LISTA -> PantallaLista(datos, lista)
-            }
-        }
-    }
-}
-
-private fun iconoDe(seccion: Seccion): ImageVector = when (seccion) {
-    Seccion.BUSCAR -> Icons.Default.Search
-    Seccion.DESPENSA -> Icons.Default.Kitchen
-    Seccion.RECETAS -> Icons.AutoMirrored.Filled.MenuBook
-    Seccion.PLAN -> Icons.Default.CalendarMonth
-    Seccion.LISTA -> Icons.Default.ShoppingCart
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun Pantalla(vm: MainViewModel = viewModel()) {
-    val s by vm.state.collectAsState()
-    val contexto = LocalContext.current
-    var ajustesAbiertos by remember { mutableStateOf(false) }
-    var informeFallo by remember { mutableStateOf(RegistroFallos.leer(contexto)) }
-
-    // La lista ya viene filtrada y ordenada del ViewModel, fuera del hilo de la
-    // interfaz: aqui no se hace ningun trabajo por cada tecla pulsada.
-    val visibles = s.visibles
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("EasyCompra $VERSION_APP") },
-                actions = {
-                    IconButton(onClick = { vm.cargar() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Recargar")
-                    }
-                    IconButton(onClick = { ajustesAbiertos = true }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Ajustes")
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize(),
-        ) {
-            OutlinedTextField(
-                value = s.busqueda,
-                onValueChange = vm::setBusqueda,
-                label = { Text("Buscar producto") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-            )
-
-            Row(
-                modifier = Modifier
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                MainViewModel.SUPERMERCADOS.forEach { sm ->
-                    FilterChip(
-                        selected = s.supermercado == sm,
-                        onClick = { vm.setSupermercado(sm) },
-                        label = { Text(sm ?: "Todos") },
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(4.dp))
-
-            Row(
-                modifier = Modifier
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Orden.values().forEach { o ->
-                    FilterChip(
-                        selected = s.orden == o,
-                        onClick = { vm.setOrden(o) },
-                        label = { Text(o.etiqueta) },
-                    )
-                }
-                FilterChip(
-                    selected = s.sinNata,
-                    onClick = { vm.setSinNata(!s.sinNata) },
-                    label = { Text("Sin nata") },
-                )
-            }
-
-            Spacer(Modifier.height(6.dp))
-
+        Box(Modifier.padding(padding).fillMaxSize()) {
+            val abierto = detalle
             when {
-                s.cargando -> Caja { CircularProgressIndicator() }
-
-                s.error != null -> Caja {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            s.error ?: "",
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 24.dp),
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        if (s.origen == Origen.SERVIDOR) {
-                            Text(s.servidor, fontSize = 12.sp, color = Color.Gray)
-                        }
-                        Spacer(Modifier.height(12.dp))
-                        Button(onClick = { vm.cargar() }) { Text("Reintentar") }
-                        TextButton(onClick = { ajustesAbiertos = true }) { Text("Ajustes") }
-                    }
-                }
-
-                visibles.isEmpty() -> Caja { Text("Sin resultados") }
-
-                else -> {
-                    val aviso = s.aviso
-                    if (aviso != null) {
-                        Text(
-                            aviso,
-                            fontSize = 12.sp,
-                            color = Color(0xFF8A5A00),
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                        )
-                    }
-                    Text(
-                        listOfNotNull(
-                            "${visibles.size} productos",
-                            fechaCorta(s.actualizado)?.let { "datos del $it" },
-                        ).joinToString(" - "),
-                        fontSize = 12.sp,
-                        color = Color.Gray,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
-                    )
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        // Con clave estable, al filtrar se reutilizan las filas
-                        // que ya estaban en pantalla en vez de rehacerlas todas.
-                        items(visibles, key = { clave(it) }) { p -> Tarjeta(p) }
-                    }
-                }
+                seccion == Seccion.PRODUCTOS && abierto != null -> PantallaDetalle(
+                    p = abierto,
+                    esFavorito = clave(abierto) in estado.favoritos,
+                    onVolver = { detalle = null },
+                    onAnadirALista = { datos.anadirProducto(abierto) },
+                    onFavorito = { catalogo.alternarFavorito(abierto) },
+                )
+                seccion == Seccion.PRODUCTOS -> PantallaProductos(
+                    vm = catalogo,
+                    estadoLista = estadoListaProductos,
+                    vistoId = resultadoVisto,
+                    onVisto = { resultadoVisto = it },
+                    onAbrir = { detalle = it },
+                    onAnadirALista = { datos.anadirProducto(it) },
+                )
+                seccion == Seccion.LISTA -> PantallaLista(datos, lista, listaProductos)
+                seccion == Seccion.DESPENSA -> PantallaDespensa(datos, despensa)
+                seccion == Seccion.RECETAS -> PantallaRecetas(datos, recetas, despensa)
+                else -> PantallaPlan(datos, plan, recetas)
             }
         }
-    }
-
-    if (ajustesAbiertos) {
-        var url by remember { mutableStateOf(s.servidor) }
-        var origen by remember { mutableStateOf(s.origen) }
-        AlertDialog(
-            onDismissRequest = { ajustesAbiertos = false },
-            title = { Text("Origen de los datos") },
-            text = {
-                Column {
-                    FilterChip(
-                        selected = origen == Origen.GITHUB,
-                        onClick = { origen = Origen.GITHUB },
-                        label = { Text("Internet (recomendado)") },
-                    )
-                    Text(
-                        "Descarga los datos publicados cada dia. No hace falta " +
-                            "tener el ordenador encendido.",
-                        fontSize = 11.sp,
-                        color = Color.Gray,
-                        modifier = Modifier.padding(top = 2.dp, bottom = 10.dp),
-                    )
-
-                    FilterChip(
-                        selected = origen == Origen.SERVIDOR,
-                        onClick = { origen = Origen.SERVIDOR },
-                        label = { Text("Servidor propio") },
-                    )
-                    Text(
-                        "Solo si tienes el backend arrancado en casa.",
-                        fontSize = 11.sp,
-                        color = Color.Gray,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                    if (origen == Origen.SERVIDOR) {
-                        Spacer(Modifier.height(6.dp))
-                        OutlinedTextField(
-                            value = url,
-                            onValueChange = { url = it },
-                            singleLine = true,
-                            label = { Text("Direccion") },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    vm.setServidor(url.trim())
-                    vm.setOrigen(origen)
-                    ajustesAbiertos = false
-                }) { Text("Guardar") }
-            },
-            dismissButton = {
-                TextButton(onClick = { ajustesAbiertos = false }) { Text("Cancelar") }
-            },
-        )
     }
 
     // Informe del ultimo cierre inesperado, si lo hubo.
@@ -340,7 +159,7 @@ fun Pantalla(vm: MainViewModel = viewModel()) {
     if (informe != null) {
         AlertDialog(
             onDismissRequest = { informeFallo = null },
-            title = { Text("La app se cerro la ultima vez") },
+            title = { Text("La app se cerró la última vez") },
             text = {
                 Column(
                     modifier = Modifier
@@ -370,83 +189,4 @@ fun Pantalla(vm: MainViewModel = viewModel()) {
             },
         )
     }
-}
-
-@Composable
-private fun Caja(contenido: @Composable () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { contenido() }
-}
-
-@Composable
-private fun Tarjeta(p: Product) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-    ) {
-        Row(
-            modifier = Modifier.padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            AsyncImage(
-                // Mercadona sirve sus fotos a 3600x3600 para un hueco de 64dp.
-                // Se pide el tamano justo: menos datos y menos memoria.
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(fotoPequena(p.photo_url))
-                    .size(192)
-                    .crossfade(false)
-                    .build(),
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-            )
-            Spacer(Modifier.width(10.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    p.name,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                val cabecera = listOfNotNull(
-                    p.supermarket.ifBlank { null },
-                    p.brand?.ifBlank { null },
-                ).joinToString(" - ")
-                if (cabecera.isNotEmpty()) {
-                    Text(cabecera, fontSize = 12.sp, color = Color.Gray)
-                }
-                val nutricion = buildList {
-                    p.energy_kcal_100g?.let { add("${it.toInt()} kcal") }
-                    p.sugars_100g?.let { add("azucar ${num(it)} g") }
-                    p.proteins_100g?.let { add("prot ${num(it)} g") }
-                }.joinToString(" - ")
-                if (nutricion.isNotEmpty()) {
-                    Text(nutricion, fontSize = 11.sp, color = Color.Gray)
-                }
-            }
-            Spacer(Modifier.width(8.dp))
-            Text(
-                p.unit_price?.let { "${num(it)} EUR" } ?: "-",
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-            )
-        }
-    }
-}
-
-private fun num(v: Double): String =
-    if (v == v.toInt().toDouble()) v.toInt().toString()
-    else String.format(Locale.US, "%.2f", v)
-
-/** "2026-08-29T19:55:14+00:00" -> "29/08". Null si no tiene esa forma. */
-private fun fechaCorta(iso: String?): String? {
-    val partes = iso?.take(10)?.split("-") ?: return null
-    return if (partes.size == 3) "${partes[2]}/${partes[1]}" else null
-}
-
-private val TAMANO_EN_URL = Regex("([?&])(w|h|width|height)=\\d+")
-
-/** Baja el tamano que se pide en la URL de la foto, si la fuente lo admite. */
-private fun fotoPequena(url: String?): String? = url?.replace(TAMANO_EN_URL) {
-    "${it.groupValues[1]}${it.groupValues[2]}=300"
 }
