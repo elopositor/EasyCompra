@@ -38,6 +38,8 @@ object Colores {
     val Lidl = Color(0xFFFFCC01)
     // Verde de su web (alimerkaonline.es).
     val Alimerka = Color(0xFF008827)
+    // Rojo de su tienda (supermercado.froiz.com).
+    val Froiz = Color(0xFFC62D2D)
 
     val StockBien = Color(0xFF10B981)
     val StockPoco = Color(0xFFF59E0B)
@@ -68,6 +70,7 @@ fun colorSupermercado(nombre: String): Color = when (nombre.lowercase()) {
     "carrefour" -> Colores.Carrefour
     "lidl" -> Colores.Lidl
     "alimerka" -> Colores.Alimerka
+    "froiz" -> Colores.Froiz
     else -> Colores.Gris
 }
 

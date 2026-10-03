@@ -52,7 +52,7 @@ import com.easycompra.ui.PantallaProductos
 import com.easycompra.ui.PantallaRecetas
 import com.easycompra.ui.TemaEasyCompra
 
-const val VERSION_APP = "v14"
+const val VERSION_APP = "v15"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -68,7 +68,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
         const val URL_POR_DEFECTO = "http://192.168.1.131:8123"
-        val SUPERMERCADOS = listOf(null, "Mercadona", "Dia", "Carrefour", "Lidl", "Alimerka")
+        val SUPERMERCADOS = listOf(null, "Mercadona", "Dia", "Carrefour", "Lidl", "Alimerka", "Froiz")
 
         /** Espera tras la ultima tecla antes de buscar. */
         private const val RETARDO_BUSQUEDA_MS = 250L
