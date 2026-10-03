@@ -99,19 +99,9 @@ def sync_mercadona() -> int:
     return _write("mercadona", list(products.values()))
 
 
-def sync_dia() -> int:
-    from . import normalize
-    products: dict[str, dict] = {}
-    for query in FOOD_QUERIES:
-        try:
-            nuevos = _dedupe(normalize.get_dia_search(query))
-        except Exception as e:
-            print(f"[dia] '{query}': {e}")
-            continue
-        before = len(products)
-        products.update({k: v for k, v in nuevos.items() if k not in products})
-        print(f"[dia] '{query}': +{len(products) - before} nuevos (total {len(products)})")
-    return _write("dia", list(products.values()))
+async def sync_dia() -> int:
+    from .dia_scraper import scrape_dia
+    return _write("dia", await scrape_dia(FOOD_QUERIES))
 
 
 async def main() -> int:
@@ -119,9 +109,10 @@ async def main() -> int:
     counts = {
         "Carrefour": await sync_carrefour(),
         "Lidl": await sync_lidl(),
-        # Mercadona y Dia son APIs JSON sincronas: van en un hilo aparte.
+        # Mercadona es una API JSON sincrona: va en un hilo aparte.
         "Mercadona": await asyncio.to_thread(sync_mercadona),
-        "Dia": await asyncio.to_thread(sync_dia),
+        # Dia, como Carrefour, necesita navegador por Akamai.
+        "Dia": await sync_dia(),
     }
     print("=== Completado: " + " + ".join(f"{n} {name}" for name, n in counts.items()) + " ===")
 
