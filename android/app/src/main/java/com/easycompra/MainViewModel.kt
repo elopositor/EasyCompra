@@ -20,12 +20,15 @@ import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 
-/** Pestanas de orden de la v5, con la unidad que se ensena en cada tarjeta. */
-enum class Orden(val etiqueta: String) {
+/**
+ * Pestanas de orden de la v5. [deMenorAMayor] es el sentido al pulsarla por
+ * primera vez: proteinas, de mas a menos; el resto, de menos a mas.
+ */
+enum class Orden(val etiqueta: String, val deMenorAMayor: Boolean = true) {
     AZUCARES("Azúcares"),
     CALORIAS("Calorías"),
     GRASAS("Grasas"),
-    PROTEINAS("Proteínas"),
+    PROTEINAS("Proteínas", deMenorAMayor = false),
     PRECIO("Precio"),
 }
 
@@ -39,12 +42,22 @@ data class UiState(
     val aproximado: Boolean = false,
     val hayCatalogo: Boolean = false,
     val busqueda: String = "",
-    val supermercado: String? = null,
+    /** Vacio = todos. */
+    val supermercados: Set<String> = emptySet(),
+    /** null = todas. */
+    val categoria: String? = null,
+    /** Categorias que tienen algun producto, para no ensenar chips vacios. */
+    val categorias: List<String> = emptyList(),
     val orden: Orden = Orden.AZUCARES,
-    val sinNata: Boolean = false,
-    /** 'A'..'E' o null para todos. */
-    val nutri: Char? = null,
+    /** Pulsar otra vez la pestana del orden lo invierte. */
+    val invertido: Boolean = false,
     val soloFavoritos: Boolean = false,
+    /**
+     * Sube cada vez que la lista cambia porque se ha tocado un filtro o la
+     * busqueda. La pantalla vuelve arriba solo entonces: al volver del
+     * detalle debe seguir donde estaba.
+     */
+    val resultadoId: Int = 0,
     val favoritos: Set<String> = emptySet(),
     val origen: Origen = Origen.GITHUB,
     val servidor: String = MainViewModel.URL_POR_DEFECTO,
@@ -106,17 +119,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setOrden(o: Orden) {
-        _state.update { it.copy(orden = o) }
+        _state.update {
+            if (it.orden == o) it.copy(invertido = !it.invertido) else it.copy(orden = o, invertido = false)
+        }
         programarFiltrado(0)
     }
 
-    fun setSinNata(v: Boolean) {
-        _state.update { it.copy(sinNata = v) }
-        programarFiltrado(0)
-    }
-
-    fun setNutri(nota: Char?) {
-        _state.update { it.copy(nutri = nota) }
+    fun setCategoria(c: String?) {
+        _state.update { it.copy(categoria = c) }
         programarFiltrado(0)
     }
 
@@ -128,11 +138,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun alternarFavorito(p: Product) {
         favoritosStore.alternar(p)
         _state.update { it.copy(favoritos = favoritosStore.claves.value) }
-        if (_state.value.soloFavoritos) programarFiltrado(0)
+        // Sin volver arriba: se ha marcado desde la lista y hay que seguir ahi.
+        if (_state.value.soloFavoritos) programarFiltrado(0, volverArriba = false)
     }
 
+    /** null = Todos. Un supermercado se suma o se quita de la seleccion. */
     fun setSupermercado(s: String?) {
-        _state.update { it.copy(supermercado = s) }
+        _state.update {
+            it.copy(
+                supermercados = when {
+                    s == null -> emptySet()
+                    s in it.supermercados -> it.supermercados - s
+                    else -> it.supermercados + s
+                }
+            )
+        }
         programarFiltrado(0)
     }
 
@@ -173,8 +193,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 cache
             }
             catalogo = withContext(Dispatchers.Default) { Busqueda.indexar(datos.productos) }
+            val presentes = catalogo.mapTo(HashSet()) { it.categoria }
             _state.update {
                 it.copy(
+                    categorias = Categorias.TODAS.filter { c -> c in presentes },
                     cargando = false,
                     hayCatalogo = true,
                     actualizado = datos.actualizado,
@@ -186,14 +208,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun programarFiltrado(retardoMs: Long) {
+    private fun programarFiltrado(retardoMs: Long, volverArriba: Boolean = true) {
         trabajoFiltrado?.cancel()
         trabajoFiltrado = viewModelScope.launch(sinCierres) {
             if (retardoMs > 0) delay(retardoMs)
             val actual = _state.value
             val entradas = catalogo
             val resultado = withContext(Dispatchers.Default) { filtrar(entradas, actual) }
-            _state.update { it.copy(visibles = resultado.productos, aproximado = resultado.aproximado) }
+            _state.update {
+                it.copy(
+                    visibles = resultado.productos,
+                    aproximado = resultado.aproximado,
+                    resultadoId = if (volverArriba) it.resultadoId + 1 else it.resultadoId,
+                )
+            }
         }
     }
 
@@ -208,20 +236,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Filtros, busqueda y orden sobre lo ya descargado. Fuera del hilo principal. */
     private fun filtrar(entradas: List<Busqueda.Entrada>, s: UiState): Busqueda.Resultado {
+        val supers = s.supermercados.mapTo(HashSet()) { it.lowercase() }
         val candidatas = entradas.filter { e ->
-            (s.supermercado == null || e.producto.supermarket.equals(s.supermercado, ignoreCase = true)) &&
-                (!s.sinNata || !e.producto.contains_nata) &&
-                (s.nutri == null || NutriScore.nota(e.producto) == s.nutri) &&
+            (supers.isEmpty() || e.producto.supermarket.lowercase() in supers) &&
+                (s.categoria == null || e.categoria == s.categoria) &&
                 (!s.soloFavoritos || clave(e.producto) in s.favoritos)
         }
-        // Lo que no tiene el dato va al final. Proteinas: de mas a menos.
-        val orden: Comparator<Product> = when (s.orden) {
-            Orden.AZUCARES -> compareBy { it.sugars_100g ?: Double.MAX_VALUE }
-            Orden.CALORIAS -> compareBy { it.energy_kcal_100g ?: Double.MAX_VALUE }
-            Orden.GRASAS -> compareBy { it.fat_100g ?: Double.MAX_VALUE }
-            Orden.PROTEINAS -> compareByDescending { it.proteins_100g ?: -1.0 }
-            Orden.PRECIO -> compareBy { it.unit_price ?: Double.MAX_VALUE }
+        val dato: (Product) -> Double? = when (s.orden) {
+            Orden.AZUCARES -> { p -> p.sugars_100g }
+            Orden.CALORIAS -> { p -> p.energy_kcal_100g }
+            Orden.GRASAS -> { p -> p.fat_100g }
+            Orden.PROTEINAS -> { p -> p.proteins_100g }
+            Orden.PRECIO -> { p -> p.unit_price }
         }
+        // Lo que no tiene el dato va al final, en un sentido y en el otro.
+        val deMenorAMayor = s.orden.deMenorAMayor != s.invertido
+        val orden: Comparator<Product> = compareBy(
+            nullsLast(if (deMenorAMayor) naturalOrder() else reverseOrder<Double>())
+        ) { p: Product -> dato(p) }
         val resultado = Busqueda.buscar(candidatas, s.busqueda, orden)
         // Sin duplicados: la lista se pinta con clave por producto y dos claves
         // iguales tumbarian la LazyColumn.

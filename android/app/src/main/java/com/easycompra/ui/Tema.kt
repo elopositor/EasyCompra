@@ -30,12 +30,7 @@ object Colores {
     val VerdeSecundario = Color(0xFF26A69A)
     val Fondo = Color(0xFFF5F5F5)
 
-    val NutriA = Color(0xFF038141)
-    val NutriB = Color(0xFF85BB2F)
-    val NutriC = Color(0xFFFECC02)
-    val NutriD = Color(0xFFEF8200)
-    val NutriE = Color(0xFFE63E11)
-    val NutriDesconocido = Color(0xFF9E9E9E)
+    val Gris = Color(0xFF9E9E9E)
 
     val Mercadona = Color(0xFF00AEE0)
     val Dia = Color(0xFFE31837)
@@ -70,23 +65,14 @@ fun colorSupermercado(nombre: String): Color = when (nombre.lowercase()) {
     "dia" -> Colores.Dia
     "carrefour" -> Colores.Carrefour
     "lidl" -> Colores.Lidl
-    else -> Colores.NutriDesconocido
+    else -> Colores.Gris
 }
 
-fun colorNutri(nota: Char?): Color = when (nota) {
-    'A' -> Colores.NutriA
-    'B' -> Colores.NutriB
-    'C' -> Colores.NutriC
-    'D' -> Colores.NutriD
-    'E' -> Colores.NutriE
-    else -> Colores.NutriDesconocido
-}
-
-/** Texto oscuro sobre los fondos claros (Lidl, Nutri C), blanco en el resto. */
+/** Texto oscuro sobre el amarillo de Lidl, blanco en el resto. */
 private fun textoSobre(fondo: Color): Color =
-    if (fondo == Colores.Lidl || fondo == Colores.NutriC) Color(0xFF1F1F1F) else Color.White
+    if (fondo == Colores.Lidl) Color(0xFF1F1F1F) else Color.White
 
-/** Etiqueta de color: "Mercadona", "Nutri D"... */
+/** Etiqueta de color: "Mercadona", "Dia"... */
 @Composable
 fun Etiqueta(texto: String, fondo: Color, modifier: Modifier = Modifier, grande: Boolean = false) {
     Box(
@@ -107,10 +93,6 @@ fun Etiqueta(texto: String, fondo: Color, modifier: Modifier = Modifier, grande:
 @Composable
 fun EtiquetaSupermercado(nombre: String, grande: Boolean = false) =
     Etiqueta(nombre.replaceFirstChar { it.uppercase() }, colorSupermercado(nombre), grande = grande)
-
-@Composable
-fun EtiquetaNutri(nota: Char?, grande: Boolean = false) =
-    Etiqueta("Nutri ${nota ?: '?'}", colorNutri(nota), grande = grande)
 
 /** Barra superior verde de todas las secciones, como en la v5. */
 @OptIn(ExperimentalMaterial3Api::class)

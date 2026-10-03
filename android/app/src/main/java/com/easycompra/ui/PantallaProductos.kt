@@ -1,7 +1,8 @@
 package com.easycompra.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,14 +16,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -60,7 +65,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -71,21 +78,32 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.easycompra.MainViewModel
-import com.easycompra.NutriScore
 import com.easycompra.Orden
 import com.easycompra.Origen
 import com.easycompra.Product
 import com.easycompra.clave
+import android.widget.Toast
 import java.util.Locale
 
+/**
+ * [estadoLista] y [vistoId] vienen de fuera para que sobrevivan al ir al
+ * detalle y volver: asi la lista sigue donde se dejo.
+ */
 @Composable
-fun PantallaProductos(vm: MainViewModel, onAbrir: (Product) -> Unit) {
+fun PantallaProductos(
+    vm: MainViewModel,
+    estadoLista: LazyListState,
+    vistoId: Int,
+    onVisto: (Int) -> Unit,
+    onAbrir: (Product) -> Unit,
+    onAnadirALista: (Product) -> Unit,
+) {
     val s by vm.state.collectAsState()
+    val contexto = LocalContext.current
     // Al volver del detalle con una busqueda puesta, la barra sigue abierta:
     // si no, la lista quedaria filtrada sin que se viera por que.
     var buscando by remember { mutableStateOf(s.busqueda.isNotEmpty()) }
     var ajustesAbiertos by remember { mutableStateOf(false) }
-    val estadoLista = rememberLazyListState()
 
     // Atras con la busqueda abierta la cierra, no sale de la app.
     BackHandler(enabled = buscando) {
@@ -93,9 +111,13 @@ fun PantallaProductos(vm: MainViewModel, onAbrir: (Product) -> Unit) {
         vm.setBusqueda("")
     }
 
-    // Resultados nuevos: se vuelve arriba para verlos desde el primero.
-    LaunchedEffect(s.visibles) {
-        if (s.visibles.isNotEmpty()) runCatching { estadoLista.scrollToItem(0) }
+    // Se ha cambiado un filtro o la busqueda: arriba, para ver los resultados
+    // desde el primero. Al volver del detalle el id es el mismo y no se mueve.
+    LaunchedEffect(s.resultadoId) {
+        if (s.resultadoId != vistoId) {
+            runCatching { estadoLista.scrollToItem(0) }
+            onVisto(s.resultadoId)
+        }
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -157,7 +179,25 @@ fun PantallaProductos(vm: MainViewModel, onAbrir: (Product) -> Unit) {
                     // Con clave estable, al filtrar se reutilizan las filas
                     // que ya estaban en pantalla en vez de rehacerlas todas.
                     items(s.visibles, key = { clave(it) }) { p ->
-                        TarjetaProducto(p, s.orden, onClick = { onAbrir(p) })
+                        val favorito = clave(p) in s.favoritos
+                        TarjetaProducto(
+                            p = p,
+                            orden = s.orden,
+                            favorito = favorito,
+                            onClick = { onAbrir(p) },
+                            onAnadirALista = {
+                                onAnadirALista(p)
+                                Toast.makeText(contexto, "Añadido a Mi lista", Toast.LENGTH_SHORT).show()
+                            },
+                            onFavorito = {
+                                vm.alternarFavorito(p)
+                                Toast.makeText(
+                                    contexto,
+                                    if (favorito) "Quitado de favoritos" else "Guardado en favoritos",
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            },
+                        )
                     }
                 }
             }
@@ -253,15 +293,21 @@ private fun MenuAjustes(onAjustes: () -> Unit) {
 @Composable
 private fun Filtros(vm: MainViewModel, s: com.easycompra.UiState) {
     Column(Modifier.padding(top = 8.dp)) {
+        // Supermercados: se pueden marcar varios. Ninguno marcado = Todos.
         Row(
             Modifier.horizontalScrollable().padding(horizontal = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            MainViewModel.SUPERMERCADOS.forEach { sm ->
+            FilterChip(
+                selected = s.supermercados.isEmpty(),
+                onClick = { vm.setSupermercado(null) },
+                label = { Text("Todos") },
+            )
+            MainViewModel.SUPERMERCADOS.filterNotNull().forEach { sm ->
                 FilterChip(
-                    selected = s.supermercado == sm,
+                    selected = sm in s.supermercados,
                     onClick = { vm.setSupermercado(sm) },
-                    label = { Text(sm ?: "Todos") },
+                    label = { Text(sm) },
                 )
             }
             FilterChip(
@@ -270,33 +316,32 @@ private fun Filtros(vm: MainViewModel, s: com.easycompra.UiState) {
                 leadingIcon = { Icon(Icons.Default.Favorite, contentDescription = null, Modifier.size(16.dp)) },
                 label = { Text("Favoritos") },
             )
-            FilterChip(
-                selected = s.sinNata,
-                onClick = { vm.setSinNata(!s.sinNata) },
-                label = { Text("Sin nata") },
-            )
         }
 
-        Row(
-            Modifier.horizontalScrollable().padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            FilterChip(
-                selected = s.nutri == null,
-                onClick = { vm.setNutri(null) },
-                label = { Text("Nutri: Todos") },
-            )
-            listOf('A', 'B', 'C', 'D', 'E').forEach { nota ->
+        if (s.categorias.isNotEmpty()) {
+            Row(
+                Modifier.horizontalScrollable().padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 FilterChip(
-                    selected = s.nutri == nota,
-                    onClick = { vm.setNutri(if (s.nutri == nota) null else nota) },
-                    label = { Etiqueta("Nutri $nota", colorNutri(nota)) },
+                    selected = s.categoria == null,
+                    onClick = { vm.setCategoria(null) },
+                    label = { Text("Todas") },
                 )
+                s.categorias.forEach { c ->
+                    FilterChip(
+                        selected = s.categoria == c,
+                        onClick = { vm.setCategoria(if (s.categoria == c) null else c) },
+                        label = { Text(c) },
+                    )
+                }
             }
         }
 
+        // Pulsar la pestana que ya esta elegida invierte el orden; la flecha
+        // dice en que sentido va.
         val indice = Orden.entries.indexOf(s.orden)
+        val deMenorAMayor = s.orden.deMenorAMayor != s.invertido
         ScrollableTabRow(
             selectedTabIndex = indice,
             containerColor = Colores.Fondo,
@@ -313,7 +358,19 @@ private fun Filtros(vm: MainViewModel, s: com.easycompra.UiState) {
                 Tab(
                     selected = s.orden == o,
                     onClick = { vm.setOrden(o) },
-                    text = { Text(o.etiqueta, fontSize = 15.sp) },
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(o.etiqueta, fontSize = 15.sp)
+                            if (s.orden == o) {
+                                Spacer(Modifier.width(4.dp))
+                                Icon(
+                                    if (deMenorAMayor) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                                    contentDescription = if (deMenorAMayor) "de menor a mayor" else "de mayor a menor",
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
+                    },
                     selectedContentColor = Colores.Verde,
                     unselectedContentColor = Colores.Verde,
                 )
@@ -347,46 +404,106 @@ private fun Avisos(s: com.easycompra.UiState) {
     )
 }
 
+/** Tocar abre el detalle; mantener pulsado, el menu de lista y favoritos. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TarjetaProducto(p: Product, orden: Orden, onClick: () -> Unit) {
-    val nota = remember(p) { NutriScore.nota(p) }
-    Card(
-        onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = Modifier
+private fun TarjetaProducto(
+    p: Product,
+    orden: Orden,
+    favorito: Boolean,
+    onClick: () -> Unit,
+    onAnadirALista: () -> Unit,
+    onFavorito: () -> Unit,
+) {
+    var menu by remember { mutableStateOf(false) }
+    val vibracion = LocalHapticFeedback.current
+
+    Box(
+        Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            FotoProducto(p.photo_url, Modifier.size(88.dp))
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (p.supermarket.isNotBlank()) EtiquetaSupermercado(p.supermarket)
-                    EtiquetaNutri(nota)
-                }
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    p.name,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 16.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        p.unit_price?.let { euros(it) } ?: "—",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp,
-                        color = Colores.Verde,
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .combinedClickable(
+                        onClick = onClick,
+                        onLongClick = {
+                            vibracion.performHapticFeedback(HapticFeedbackType.LongPress)
+                            menu = true
+                        },
+                        onLongClickLabel = "Añadir a Mi lista o a favoritos",
                     )
-                    Spacer(Modifier.width(12.dp))
-                    Text(dato(p, orden), fontSize = 14.sp, color = Color.Gray)
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FotoProducto(p.photo_url, Modifier.size(88.dp))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (p.supermarket.isNotBlank()) EtiquetaSupermercado(p.supermarket)
+                        Spacer(Modifier.weight(1f))
+                        if (favorito) {
+                            Icon(
+                                Icons.Default.Favorite,
+                                contentDescription = "Favorito",
+                                tint = Colores.Verde,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        p.name,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 16.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            p.unit_price?.let { euros(it) } ?: "—",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp,
+                            color = Colores.Verde,
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(dato(p, orden), fontSize = 14.sp, color = Color.Gray)
+                    }
                 }
             }
+        }
+
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(
+                text = { Text("Añadir a Mi lista") },
+                leadingIcon = { Icon(Icons.Default.ShoppingCart, contentDescription = null, tint = Colores.Verde) },
+                onClick = {
+                    menu = false
+                    onAnadirALista()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(if (favorito) "Quitar de favoritos" else "Guardar en favoritos") },
+                leadingIcon = {
+                    Icon(
+                        if (favorito) Icons.Default.FavoriteBorder else Icons.Default.Favorite,
+                        contentDescription = null,
+                        tint = Colores.Verde,
+                    )
+                },
+                onClick = {
+                    menu = false
+                    onFavorito()
+                },
+            )
         }
     }
 }
