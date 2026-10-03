@@ -1,6 +1,6 @@
 """
 Script para GitHub Actions.
-Ejecuta las cuatro fuentes (Carrefour, Lidl, Mercadona y Dia) y guarda los
+Ejecuta las fuentes (Carrefour, Lidl, Mercadona, Dia y Alimerka) y guarda los
 resultados como JSON en backend/data/, que luego se commitea al repositorio.
 El servidor FastAPI sirve esos JSON directamente.
 
@@ -48,7 +48,7 @@ def _write_index(counts: dict[str, int]) -> None:
         "supermarkets": {},
         "total": 0,
     }
-    for name in ("carrefour", "dia", "lidl", "mercadona"):
+    for name in ("alimerka", "carrefour", "dia", "lidl", "mercadona"):
         path = DATA_DIR / f"{name}.json"
         if not path.exists():
             continue
@@ -99,19 +99,14 @@ def sync_mercadona() -> int:
     return _write("mercadona", list(products.values()))
 
 
-def sync_dia() -> int:
-    from . import normalize
-    products: dict[str, dict] = {}
-    for query in FOOD_QUERIES:
-        try:
-            nuevos = _dedupe(normalize.get_dia_search(query))
-        except Exception as e:
-            print(f"[dia] '{query}': {e}")
-            continue
-        before = len(products)
-        products.update({k: v for k, v in nuevos.items() if k not in products})
-        print(f"[dia] '{query}': +{len(products) - before} nuevos (total {len(products)})")
-    return _write("dia", list(products.values()))
+async def sync_dia() -> int:
+    from .dia_scraper import scrape_dia
+    return _write("dia", await scrape_dia(FOOD_QUERIES))
+
+
+async def sync_alimerka() -> int:
+    from .alimerka_scraper import scrape_alimerka
+    return _write("alimerka", await scrape_alimerka())
 
 
 async def main() -> int:
@@ -119,9 +114,12 @@ async def main() -> int:
     counts = {
         "Carrefour": await sync_carrefour(),
         "Lidl": await sync_lidl(),
-        # Mercadona y Dia son APIs JSON sincronas: van en un hilo aparte.
+        # Mercadona es una API JSON sincrona: va en un hilo aparte.
         "Mercadona": await asyncio.to_thread(sync_mercadona),
-        "Dia": await asyncio.to_thread(sync_dia),
+        # Dia, como Carrefour, necesita navegador por Akamai.
+        "Dia": await sync_dia(),
+        # Alimerka: su tienda online, sin navegador (catalogo por secciones).
+        "Alimerka": await sync_alimerka(),
     }
     print("=== Completado: " + " + ".join(f"{n} {name}" for name, n in counts.items()) + " ===")
 

@@ -13,8 +13,8 @@ android {
         applicationId = "com.easycompra"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10
-        versionName = "v10"
+        versionCode = 14
+        versionName = "v14"
     }
 
     // Firma propia y estable. Sin ella, cada maquina firma con su certificado
@@ -88,4 +88,6 @@ dependencies {
     ksp("androidx.room:room-compiler:2.6.1")
 
     implementation("androidx.compose.material:material-icons-extended")
+
+    testImplementation("junit:junit:4.13.2")
 }

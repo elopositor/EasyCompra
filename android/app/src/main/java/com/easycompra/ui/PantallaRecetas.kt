@@ -112,8 +112,10 @@ private fun ListaRecetas(
     }
 
     Scaffold(
+        containerColor = Colores.Fondo,
+        topBar = { BarraVerde("Recetas", "${recetas.size} recetas") },
         floatingActionButton = {
-            FloatingActionButton(onClick = onCrear) {
+            FloatingActionButton(onClick = onCrear, containerColor = Colores.Verde, contentColor = Color.White) {
                 Icon(Icons.Default.Add, contentDescription = "Nueva receta")
             }
         }

@@ -65,8 +65,10 @@ fun PantallaDespensa(vm: DatosViewModel, despensa: List<ProductoConUbicaciones>)
     }
 
     Scaffold(
+        containerColor = Colores.Fondo,
+        topBar = { BarraVerde("Despensa", "${despensa.size} productos") },
         floatingActionButton = {
-            FloatingActionButton(onClick = { anadiendo = true }) {
+            FloatingActionButton(onClick = { anadiendo = true }, containerColor = Colores.Verde, contentColor = Color.White) {
                 Icon(Icons.Default.Add, contentDescription = "Añadir a la despensa")
             }
         }

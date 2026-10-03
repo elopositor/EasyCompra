@@ -26,7 +26,8 @@ jobs:
       - name: Instalar dependencias
         run: |
           pip install -r backend/requirements.txt
-          playwright install chromium
+          # Carrefour y Dia van con camoufox (Firefox). Lidl ya no necesita
+          # navegador, asi que no se descarga Chromium.
           python -m camoufox fetch
 
       - name: Sincronizar Carrefour, Lidl, Mercadona y Dia

@@ -1,5 +1,10 @@
 package com.easycompra.ui
 
+import java.util.Locale
+import java.time.format.DateTimeFormatter
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Today
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -64,20 +69,23 @@ fun PantallaPlan(
     }
 
     Column(Modifier.fillMaxSize()) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(onClick = { lunes = lunes.minusWeeks(1) }) { Text("< Anterior") }
-            Text(
-                "${lunes.dayOfMonth} - ${lunes.plusDays(6).dayOfMonth} de ${mesCorto(lunes)}",
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp,
-                modifier = Modifier.weight(1f),
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            TextButton(onClick = { lunes = lunes.plusWeeks(1) }) { Text("Siguiente >") }
-        }
+        BarraVerde(
+            titulo = "Planificador semanal",
+            subtitulo = "${diaYMes(lunes)} – ${diaYMes(lunes.plusDays(6))}",
+            navegacion = {
+                IconButton(onClick = { lunes = lunes.minusWeeks(1) }) {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Semana anterior")
+                }
+            },
+            acciones = {
+                IconButton(onClick = { lunes = lunesDe(LocalDate.now()) }) {
+                    Icon(Icons.Default.Today, contentDescription = "Esta semana")
+                }
+                IconButton(onClick = { lunes = lunes.plusWeeks(1) }) {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Semana siguiente")
+                }
+            },
+        )
 
         AnalisisSemana(dias, porDia, recetas)
 
@@ -318,3 +326,10 @@ private fun DialogoPlanificar(
         dismissButton = { TextButton(onClick = onCerrar) { Text("Cancelar") } },
     )
 }
+
+private fun lunesDe(fecha: LocalDate): LocalDate = fecha.minusDays((fecha.dayOfWeek.value - 1).toLong())
+
+private val DIA_MES = DateTimeFormatter.ofPattern("d MMM", Locale.forLanguageTag("es-ES"))
+
+/** "31 ago" */
+private fun diaYMes(fecha: LocalDate): String = fecha.format(DIA_MES).replace(".", "")
