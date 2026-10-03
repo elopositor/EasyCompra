@@ -1,6 +1,6 @@
 """
 Script para GitHub Actions.
-Ejecuta las fuentes (Carrefour, Lidl, Mercadona, Dia, Alimerka y Froiz) y guarda los
+Ejecuta las fuentes (Carrefour, Lidl, Mercadona, Dia y Alimerka) y guarda los
 resultados como JSON en backend/data/, que luego se commitea al repositorio.
 El servidor FastAPI sirve esos JSON directamente.
 
@@ -51,7 +51,7 @@ def _write_index(counts: dict[str, int]) -> None:
         "supermarkets": {},
         "total": 0,
     }
-    for name in ("alimerka", "carrefour", "dia", "froiz", "lidl", "mercadona"):
+    for name in ("alimerka", "carrefour", "dia", "lidl", "mercadona"):
         path = DATA_DIR / f"{name}.json"
         if not path.exists():
             continue
@@ -155,24 +155,31 @@ async def sync_alimerka() -> int:
     return _write("alimerka", await scrape_alimerka())
 
 
-async def sync_froiz() -> int:
-    from .froiz_scraper import scrape_froiz
-    return _write("froiz", await scrape_froiz())
+async def _seguro(nombre: str, trabajo) -> int:
+    """Un supermercado que falla no tumba a los demas: cuenta como 0 productos
+    (se conservan sus datos anteriores y el sync acaba en rojo para avisar)."""
+    try:
+        if asyncio.iscoroutine(trabajo):
+            return await trabajo
+        return await asyncio.to_thread(trabajo)
+    except Exception as e:
+        print(f"[{nombre}] ERROR: {type(e).__name__}: {e}")
+        return 0
 
 
 async def main() -> int:
     print("=== EasyCompra Sync ===")
     counts = {
-        "Carrefour": await sync_carrefour(),
-        "Lidl": await sync_lidl(),
+        "Carrefour": await _seguro("Carrefour", sync_carrefour()),
+        "Lidl": await _seguro("Lidl", sync_lidl()),
         # Mercadona es una API JSON sincrona: va en un hilo aparte.
-        "Mercadona": await asyncio.to_thread(sync_mercadona),
+        "Mercadona": await _seguro("Mercadona", sync_mercadona),
         # Dia, como Carrefour, necesita navegador por Akamai.
-        "Dia": await sync_dia(),
+        "Dia": await _seguro("Dia", sync_dia()),
         # Alimerka: su tienda online, sin navegador (catalogo por secciones).
-        "Alimerka": await sync_alimerka(),
-        # Froiz: la API publica de su tienda online, sin navegador.
-        "Froiz": await sync_froiz(),
+        "Alimerka": await _seguro("Alimerka", sync_alimerka()),
+        # Froiz no va aqui: Cloudflare bloquea las IP de GitHub (403 tambien
+        # con navegador). Lo descarga la app directamente desde el movil.
     }
     print("=== Completado: " + " + ".join(f"{n} {name}" for name, n in counts.items()) + " ===")
 
