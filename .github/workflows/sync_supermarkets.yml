@@ -34,7 +34,9 @@ jobs:
         run: |
           cd backend
           python -m app.sync_to_json
-        timeout-minutes: 45
+        # Con fruta y verdura hay mas busquedas en Dia (navegador, ~1 s por
+        # producto) y mas fichas de Mercadona: 45 min se quedaba justo.
+        timeout-minutes: 90
 
       - name: Guardar datos actualizados en el repositorio
         run: |
