@@ -155,7 +155,10 @@ class Repositorio(private val dirCache: File) {
 
         // El indice dice que ficheros hay y de cuando son. Si no se puede leer,
         // se tira de la lista conocida: es preferible a no mostrar nada.
-        val indice = runCatching { api.indice(ApiFactory.BASE_DATOS + "index.json") }.getOrNull()
+        // Un fallo puntual de red no debe dejar la app sin fecha: un reintento.
+        val indice = runCatching { api.indice(ApiFactory.BASE_DATOS + "index.json") }
+            .recoverCatching { api.indice(ApiFactory.BASE_DATOS + "index.json") }
+            .getOrNull()
 
         val nombres = indice?.supermarkets?.keys?.toList()?.takeIf { it.isNotEmpty() }
             ?: ApiFactory.FICHEROS
