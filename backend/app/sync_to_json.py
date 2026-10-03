@@ -1,6 +1,6 @@
 """
 Script para GitHub Actions.
-Ejecuta las cuatro fuentes (Carrefour, Lidl, Mercadona y Dia) y guarda los
+Ejecuta las fuentes (Carrefour, Lidl, Mercadona, Dia y Alimerka) y guarda los
 resultados como JSON en backend/data/, que luego se commitea al repositorio.
 El servidor FastAPI sirve esos JSON directamente.
 
@@ -48,7 +48,7 @@ def _write_index(counts: dict[str, int]) -> None:
         "supermarkets": {},
         "total": 0,
     }
-    for name in ("carrefour", "dia", "lidl", "mercadona"):
+    for name in ("alimerka", "carrefour", "dia", "lidl", "mercadona"):
         path = DATA_DIR / f"{name}.json"
         if not path.exists():
             continue
@@ -104,6 +104,11 @@ async def sync_dia() -> int:
     return _write("dia", await scrape_dia(FOOD_QUERIES))
 
 
+async def sync_alimerka() -> int:
+    from .alimerka_scraper import scrape_alimerka
+    return _write("alimerka", await scrape_alimerka())
+
+
 async def main() -> int:
     print("=== EasyCompra Sync ===")
     counts = {
@@ -113,6 +118,8 @@ async def main() -> int:
         "Mercadona": await asyncio.to_thread(sync_mercadona),
         # Dia, como Carrefour, necesita navegador por Akamai.
         "Dia": await sync_dia(),
+        # Alimerka: su tienda online, sin navegador (catalogo por secciones).
+        "Alimerka": await sync_alimerka(),
     }
     print("=== Completado: " + " + ".join(f"{n} {name}" for name, n in counts.items()) + " ===")
 

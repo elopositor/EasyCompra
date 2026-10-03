@@ -100,7 +100,7 @@ object ApiFactory {
     const val BASE_DATOS =
         "https://raw.githubusercontent.com/elopositor/EasyCompra-datos/main/"
 
-    val FICHEROS = listOf("carrefour", "dia", "lidl", "mercadona")
+    val FICHEROS = listOf("alimerka", "carrefour", "dia", "lidl", "mercadona")
 
     val json = Json {
         ignoreUnknownKeys = true   // campos nuevos en el origen: se ignoran

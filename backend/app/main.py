@@ -14,7 +14,7 @@ app = FastAPI(title="EasyCompra API")
 DATA_DIR = Path(__file__).parent.parent / "data"
 
 # Supermercados servidos desde JSON (actualizado por GitHub Actions)
-JSON_SUPERMARKETS = {"Carrefour", "Lidl", "Mercadona", "Dia"}
+JSON_SUPERMARKETS = {"Carrefour", "Lidl", "Mercadona", "Dia", "Alimerka"}
 
 # Compatibilidad con la app Android v5, cuyo codigo fuente ya no tenemos.
 # Deserializa con kotlinx.serialization y su modelo incluye nutriscore_grade
