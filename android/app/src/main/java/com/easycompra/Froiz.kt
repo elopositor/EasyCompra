@@ -24,10 +24,15 @@ import java.io.File
  *
  * Son ~34 paginas de 200 articulos. Para no repetirlo en cada arranque se
  * guarda en disco y se reutiliza 12 horas, salvo al pulsar recargar.
+ *
+ * Cada tienda tiene su surtido (el precio es el mismo): se pide el de la
+ * tienda que Froiz asigna al codigo postal. Si esa tienda es de otra
+ * provincia (en Asturias le da una de Toledo), es que no hay Froiz cerca.
  */
 object Froiz {
 
     private const val API = "https://servicios.froiz.com/api/products"
+    private const val TIENDAS = "https://servicios.froiz.com/api/stores/postalcode"
     private const val IMAGENES = "https://imagedelivery.net/laxGYDNZyT04iZVpzPzryw"
     private const val TIENDA = "https://supermercado.froiz.com/product"
     private const val PAGINA = 200
@@ -48,6 +53,20 @@ object Froiz {
         @Headers("Accept: application/json")
         @GET
         suspend fun pagina(@Url url: String): Pagina
+
+        @Headers("Accept: application/json")
+        @GET
+        suspend fun tienda(@Url url: String): Tienda
+    }
+
+    @Serializable
+    class Tienda(val codEnt: Int? = null, val codSubent: Int? = null, val postalCode: String? = null)
+
+    /** "1_123" para la API, o null si la tienda asignada es de otra provincia. */
+    fun codigoTienda(t: Tienda, cp: String): String? {
+        if (t.codEnt == null || t.codSubent == null) return null
+        if (t.postalCode?.take(2) != cp.take(2)) return null
+        return "${t.codEnt}_${t.codSubent}"
     }
 
     @Serializable
@@ -108,8 +127,8 @@ object Froiz {
      * guardada sea reciente. Si la descarga falla, vale la copia guardada,
      * sea de cuando sea; sin ella, lista vacia (y el resto sigue).
      */
-    suspend fun productos(dir: File, forzar: Boolean): List<Product> = withContext(Dispatchers.IO) {
-        val fichero = File(dir, "froiz.json")
+    suspend fun productos(dir: File, cp: String, forzar: Boolean): List<Product> = withContext(Dispatchers.IO) {
+        val fichero = File(dir, "froiz_$cp.json")
         val guardados = runCatching {
             ApiFactory.json.decodeFromString<List<Product>>(fichero.readText())
         }.getOrNull()
@@ -117,7 +136,7 @@ object Froiz {
         val reciente = System.currentTimeMillis() - fichero.lastModified() < VIGENCIA_MS
         if (!forzar && reciente && !guardados.isNullOrEmpty()) return@withContext guardados
 
-        runCatching { descargar() }
+        runCatching { descargar(cp) }
             .onSuccess { nuevos ->
                 if (nuevos.isNotEmpty()) {
                     runCatching { fichero.writeText(ApiFactory.json.encodeToString(nuevos)) }
@@ -128,13 +147,15 @@ object Froiz {
             ?: guardados.orEmpty()
     }
 
-    private suspend fun descargar(): List<Product> = coroutineScope {
+    private suspend fun descargar(cp: String): List<Product> = coroutineScope {
         val api = ApiFactory.froiz()
-        val primera = api.pagina("$API?page=1&size=$PAGINA")
+        // Sin tienda en la provincia: Froiz no esta en esa ciudad.
+        val tienda = codigoTienda(api.tienda("$TIENDAS/$cp"), cp) ?: return@coroutineScope emptyList()
+        val primera = api.pagina("$API?page=1&size=$PAGINA&store=$tienda")
         // El resto de 4 en 4: rapido sin cargar a su servidor.
         val turnos = Semaphore(4)
         val resto = (2..primera.stats.totalPages.coerceAtMost(100)).map { n ->
-            async { turnos.withPermit { api.pagina("$API?page=$n&size=$PAGINA") } }
+            async { turnos.withPermit { api.pagina("$API?page=$n&size=$PAGINA&store=$tienda") } }
         }.awaitAll()
         (listOf(primera) + resto)
             .flatMap { it.products }

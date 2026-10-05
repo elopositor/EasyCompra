@@ -78,6 +78,10 @@ data class Datos(
     val productos: List<Product>,
     val actualizado: String? = null,
     val deCache: Boolean = false,
+    /** Algo que contar al usuario sin que sea un error (p. ej. precios generales). */
+    val aviso: String? = null,
+    /** false = Mercadona va con los precios generales y falta pedir los de la ciudad. */
+    val mercadonaDeLaCiudad: Boolean = true,
 )
 
 /** API del backend propio (FastAPI), opcional. */
@@ -146,6 +150,12 @@ object ApiFactory {
 
     fun froiz(): Froiz.Api =
         retrofit("https://servicios.froiz.com/").create(Froiz.Api::class.java)
+
+    fun mercadona(): Mercadona.Api =
+        retrofit("https://tienda.mercadona.es/").create(Mercadona.Api::class.java)
+
+    fun alimerka(): Alimerka.Api =
+        retrofit("https://www.alimerkaonline.es/").create(Alimerka.Api::class.java)
 }
 
 /**
@@ -164,19 +174,26 @@ class Repositorio(private val dirCache: File) {
     private val ficheroCache = File(dirCache, "productos.json")
 
     /** Siempre el catalogo completo: el filtro por supermercado se hace en el movil. */
-    suspend fun cargar(origen: Origen, servidor: String, forzar: Boolean = false): Datos {
+    suspend fun cargar(origen: Origen, servidor: String, ciudad: Ciudad, forzar: Boolean = false): Datos {
         val datos = when (origen) {
-            Origen.GITHUB -> desdeGitHub(forzar)
+            Origen.GITHUB -> desdeGitHub(ciudad, forzar)
             Origen.SERVIDOR -> desdeServidor(servidor)
         }
         guardarCache(datos)
         return datos
     }
 
-    private suspend fun desdeGitHub(forzar: Boolean): Datos = coroutineScope {
+    /**
+     * Carrefour, Lidl y Dia: los de GitHub (su tienda online tiene precio
+     * nacional). Mercadona: el de la ciudad, desde el movil, con la ficha de
+     * GitHub. Alimerka: el de GitHub, solo si llega a la ciudad. Froiz: el de
+     * la tienda de la ciudad, desde el movil.
+     */
+    private suspend fun desdeGitHub(ciudad: Ciudad, forzar: Boolean): Datos = coroutineScope {
         val api = ApiFactory.publica()
-        // Froiz va por su cuenta, a la vez que el resto (ver Froiz.kt).
-        val froiz = async { runCatching { Froiz.productos(dirCache, forzar) }.getOrDefault(emptyList()) }
+        // Lo que depende de la ciudad va a la vez que las descargas de GitHub.
+        val froiz = async { runCatching { Froiz.productos(dirCache, ciudad.cp, forzar) }.getOrDefault(emptyList()) }
+        val alimerkaLlega = async { runCatching { Alimerka.llegaA(dirCache, ciudad.cp, forzar) }.getOrNull() }
 
         // El indice dice que ficheros hay y de cuando son. Si no se puede leer,
         // se tira de la lista conocida: es preferible a no mostrar nada.
@@ -190,21 +207,45 @@ class Repositorio(private val dirCache: File) {
 
         // Los ficheros se bajan a la vez, no uno detras de otro. Si uno falla,
         // se muestran los demas.
-        val descargas = nombres.map { nombre ->
+        val descargas = nombres.associateWith { nombre ->
             async(Dispatchers.IO) {
                 runCatching { api.productos("${ApiFactory.BASE_DATOS}$nombre.json") }
                     .getOrDefault(emptyList())
             }
         }
-        val productos = descargas.awaitAll().flatten() + froiz.await()
+        val porFichero = descargas.mapValues { it.value.await() }
+
+        val generalMercadona = porFichero["mercadona"].orEmpty()
+        fichasMercadona = generalMercadona.associateBy { it.external_id }
+        // Lo de la ciudad, si hay copia reciente; si no, se pide despues
+        // (mercadonaDeLaCiudad) sin hacer esperar a la app.
+        val localMercadona = if (forzar) null else Mercadona.reciente(dirCache, ciudad.cp)
+        // null = no se sabe: mejor ensenarlo que esconderlo por un fallo de red.
+        val conAlimerka = alimerkaLlega.await() != false
+
+        val productos = porFichero.filterKeys { it != "mercadona" && it != "alimerka" }.values.flatten() +
+            (localMercadona ?: generalMercadona) +
+            (if (conAlimerka) porFichero["alimerka"].orEmpty() else emptyList()) +
+            froiz.await()
 
         if (productos.isEmpty()) {
             // Sin datos y sin excepcion: mejor fallar que ensenar una lista vacia
             // como si el catalogo estuviera realmente vacio.
             throw IllegalStateException("No se ha podido descargar ningun producto.")
         }
-        Datos(productos = productos, actualizado = indice?.updated_at)
+        Datos(
+            productos = productos,
+            actualizado = indice?.updated_at,
+            mercadonaDeLaCiudad = localMercadona != null,
+        )
     }
+
+    /** Fichas de Mercadona de GitHub, para completar las de la ciudad. */
+    private var fichasMercadona: Map<String, Product> = emptyMap()
+
+    /** Mercadona con los precios y productos de la ciudad. Null si no se ha podido. */
+    suspend fun mercadonaDeLaCiudad(ciudad: Ciudad): List<Product>? =
+        runCatching { Mercadona.descargar(dirCache, ciudad.cp, fichasMercadona) }.getOrNull()
 
     private suspend fun desdeServidor(url: String): Datos =
         withContext(Dispatchers.IO) {

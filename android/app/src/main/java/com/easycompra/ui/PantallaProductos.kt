@@ -104,6 +104,7 @@ fun PantallaProductos(
     // si no, la lista quedaria filtrada sin que se viera por que.
     var buscando by remember { mutableStateOf(s.busqueda.isNotEmpty()) }
     var ajustesAbiertos by remember { mutableStateOf(false) }
+    var ciudadAbierta by remember { mutableStateOf(false) }
 
     // Atras con la busqueda abierta la cierra, no sale de la app.
     BackHandler(enabled = buscando) {
@@ -133,6 +134,7 @@ fun PantallaProductos(
         } else {
             BarraVerde(
                 titulo = "EasyCompra",
+                subtitulo = s.ciudad?.etiqueta,
                 acciones = {
                     IconButton(onClick = { vm.cargar(forzar = true) }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Sincronizar")
@@ -140,7 +142,11 @@ fun PantallaProductos(
                     IconButton(onClick = { buscando = true }) {
                         Icon(Icons.Default.Search, contentDescription = "Buscar")
                     }
-                    MenuAjustes(onAjustes = { ajustesAbiertos = true })
+                    MenuAjustes(
+                        ciudad = s.ciudad?.etiqueta,
+                        onCiudad = { ciudadAbierta = true },
+                        onAjustes = { ajustesAbiertos = true },
+                    )
                 },
             )
         }
@@ -148,7 +154,16 @@ fun PantallaProductos(
         Filtros(vm, s)
 
         when {
-            s.cargando && s.visibles.isEmpty() -> Caja { CircularProgressIndicator() }
+            s.cargando && s.visibles.isEmpty() -> Caja {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator()
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "Cargando precios${s.ciudad?.let { " de ${it.etiqueta}" }.orEmpty()}…",
+                        color = Color.Gray,
+                    )
+                }
+            }
 
             s.error != null && s.visibles.isEmpty() -> Caja {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -202,6 +217,17 @@ fun PantallaProductos(
                 }
             }
         }
+    }
+
+    if (ciudadAbierta) {
+        DialogoCiudad(
+            actual = s.ciudad,
+            onCerrar = { ciudadAbierta = false },
+            onElegir = {
+                ciudadAbierta = false
+                vm.setCiudad(it)
+            },
+        )
     }
 
     if (ajustesAbiertos) {
@@ -272,13 +298,20 @@ private fun BarraBusqueda(texto: String, onTexto: (String) -> Unit, onCerrar: ()
 }
 
 @Composable
-private fun MenuAjustes(onAjustes: () -> Unit) {
+private fun MenuAjustes(ciudad: String?, onCiudad: () -> Unit, onAjustes: () -> Unit) {
     var abierto by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { abierto = true }) {
             Icon(Icons.Default.MoreVert, contentDescription = "Mas opciones")
         }
         DropdownMenu(expanded = abierto, onDismissRequest = { abierto = false }) {
+            DropdownMenuItem(
+                text = { Text("Ciudad: ${ciudad ?: "sin elegir"}") },
+                onClick = {
+                    abierto = false
+                    onCiudad()
+                },
+            )
             DropdownMenuItem(
                 text = { Text("Origen de los datos") },
                 onClick = {
@@ -303,7 +336,10 @@ private fun Filtros(vm: MainViewModel, s: com.easycompra.UiState) {
                 onClick = { vm.setSupermercado(null) },
                 label = { Text("Todos") },
             )
-            MainViewModel.SUPERMERCADOS.filterNotNull().forEach { sm ->
+            // Solo los que hay en la ciudad (Froiz no esta en Asturias, por ejemplo).
+            MainViewModel.SUPERMERCADOS.filterNotNull()
+                .filter { s.presentes.isEmpty() || it in s.presentes }
+                .forEach { sm ->
                 FilterChip(
                     selected = sm in s.supermercados,
                     onClick = { vm.setSupermercado(sm) },

@@ -62,6 +62,10 @@ data class UiState(
     val origen: Origen = Origen.GITHUB,
     val servidor: String = MainViewModel.URL_POR_DEFECTO,
     val actualizado: String? = null,
+    /** null = aun no se ha elegido: la app la pide al abrirse. */
+    val ciudad: Ciudad? = null,
+    /** Supermercados con productos en la ciudad: solo se ensenan sus chips. */
+    val presentes: Set<String> = emptySet(),
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -85,6 +89,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }.getOrDefault(Origen.GITHUB),
             servidor = prefs.getString("servidor", URL_POR_DEFECTO) ?: URL_POR_DEFECTO,
             favoritos = favoritosStore.claves.value,
+            ciudad = prefs.getString("ciudad_cp", null)?.let { cp ->
+                Ciudad(cp, prefs.getString("ciudad_nombre", "").orEmpty())
+            },
         )
     )
     val state: StateFlow<UiState> = _state.asStateFlow()
@@ -168,8 +175,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(servidor = url) }
     }
 
-    /** [forzar]: tambien Froiz, aunque su copia guardada sea de hace poco. */
+    /** Se recuerda; cambiarla recarga todo con los datos de la nueva ciudad. */
+    fun setCiudad(c: Ciudad) {
+        prefs.edit().putString("ciudad_cp", c.cp).putString("ciudad_nombre", c.nombre).apply()
+        _state.update { it.copy(ciudad = c, supermercados = emptySet()) }
+        cargar(forzar = true)
+    }
+
+    /**
+     * [forzar]: tambien lo que se descarga desde el movil (Mercadona y Froiz
+     * de la ciudad), aunque su copia guardada sea de hace poco.
+     */
     fun cargar(forzar: Boolean = false) {
+        // Sin ciudad no se carga nada: la app esta pidiendola.
+        val ciudad = _state.value.ciudad ?: return
         // Pulsar recargar varias veces no lanza varias descargas a la vez.
         trabajoCarga?.cancel()
         _state.update { it.copy(cargando = true, error = null, aviso = null) }
@@ -177,7 +196,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         trabajoCarga = viewModelScope.launch(sinCierres) {
             var aviso: String? = null
             val datos = try {
-                repo.cargar(actual.origen, actual.servidor, forzar)
+                repo.cargar(actual.origen, actual.servidor, ciudad, forzar).also { aviso = it.aviso }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -193,19 +212,43 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 aviso = "Sin conexion: mostrando los ultimos datos guardados."
                 cache
             }
-            catalogo = withContext(Dispatchers.Default) { Busqueda.indexar(datos.productos) }
-            val presentes = catalogo.mapTo(HashSet()) { it.categoria }
+            ponerCatalogo(datos.productos)
             _state.update {
-                it.copy(
-                    categorias = Categorias.TODAS.filter { c -> c in presentes },
-                    cargando = false,
-                    hayCatalogo = true,
-                    actualizado = datos.actualizado,
-                    error = null,
-                    aviso = aviso,
-                )
+                it.copy(cargando = false, hayCatalogo = true, actualizado = datos.actualizado, error = null, aviso = aviso)
             }
             programarFiltrado(0)
+
+            // Mercadona de la ciudad: ~45 s de una en una (ver Mercadona.kt). La
+            // app ya ensena todo con los precios generales y se cambian al llegar.
+            if (!datos.mercadonaDeLaCiudad && actual.origen == Origen.GITHUB) {
+                _state.update { it.copy(aviso = "Cargando los precios de Mercadona en ${ciudad.etiqueta}…") }
+                val local = repo.mercadonaDeLaCiudad(ciudad)
+                if (local != null) {
+                    ponerCatalogo(catalogo.map { it.producto }.filter { it.supermarket != "Mercadona" } + local)
+                    _state.update { it.copy(aviso = null) }
+                    // Sin volver arriba: el usuario puede estar ya mirando la lista.
+                    programarFiltrado(0, volverArriba = false)
+                } else {
+                    _state.update {
+                        it.copy(aviso = "Mercadona: precios generales, no se han podido cargar los de ${ciudad.etiqueta}.")
+                    }
+                }
+            }
+        }
+    }
+
+    /** Indexa los productos y actualiza las categorias y supermercados que hay. */
+    private suspend fun ponerCatalogo(productos: List<Product>) {
+        catalogo = withContext(Dispatchers.Default) { Busqueda.indexar(productos) }
+        val presentes = catalogo.mapTo(HashSet()) { it.categoria }
+        val supers = catalogo.mapTo(HashSet()) { it.producto.supermarket }
+        _state.update {
+            it.copy(
+                categorias = Categorias.TODAS.filter { c -> c in presentes },
+                presentes = supers,
+                // Lo marcado que no esta en esta ciudad deja de filtrar.
+                supermercados = it.supermercados.filterTo(HashSet()) { s -> s in supers },
+            )
         }
     }
 
