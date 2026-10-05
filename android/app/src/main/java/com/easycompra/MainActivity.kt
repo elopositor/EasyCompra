@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.easycompra.datos.DatosViewModel
 import com.easycompra.ui.Colores
+import com.easycompra.ui.PantallaCiudad
 import com.easycompra.ui.PantallaDespensa
 import com.easycompra.ui.PantallaDetalle
 import com.easycompra.ui.PantallaLista
@@ -52,7 +53,7 @@ import com.easycompra.ui.PantallaProductos
 import com.easycompra.ui.PantallaRecetas
 import com.easycompra.ui.TemaEasyCompra
 
-const val VERSION_APP = "v16"
+const val VERSION_APP = "v17"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -100,6 +101,12 @@ fun AppEasyCompra() {
 
     // Atras desde el detalle vuelve a la lista de productos.
     BackHandler(enabled = detalle != null) { detalle = null }
+
+    // Primera vez: antes que nada, la ciudad. Se recuerda para las siguientes.
+    if (estado.ciudad == null) {
+        PantallaCiudad(onElegir = { catalogo.setCiudad(it) })
+        return
+    }
 
     Scaffold(
         containerColor = Colores.Fondo,
