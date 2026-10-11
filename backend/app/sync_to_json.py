@@ -155,29 +155,44 @@ async def sync_alimerka() -> int:
     return _write("alimerka", await scrape_alimerka())
 
 
+# Un corte puntual (el 10/10/2026 Lidl cerro la conexion sin responder) no
+# debe dejar a un supermercado sin datos ni el sync en rojo: se reintenta una
+# vez pasado un minuto, que es lo que suelen tardar en volver.
+PAUSA_REINTENTO_S = 60
+
+
 async def _seguro(nombre: str, trabajo) -> int:
     """Un supermercado que falla no tumba a los demas: cuenta como 0 productos
-    (se conservan sus datos anteriores y el sync acaba en rojo para avisar)."""
-    try:
-        if asyncio.iscoroutine(trabajo):
-            return await trabajo
-        return await asyncio.to_thread(trabajo)
-    except Exception as e:
-        print(f"[{nombre}] ERROR: {type(e).__name__}: {e}")
-        return 0
+    (se conservan sus datos anteriores y el sync acaba en rojo para avisar).
+
+    [trabajo] es una funcion que crea la tarea (una corrutina solo se puede
+    esperar una vez): asi se puede repetir si falla o no trae nada.
+    """
+    for intento in (1, 2):
+        try:
+            n = await trabajo()
+            if n > 0:
+                return n
+            print(f"[{nombre}] 0 productos (intento {intento})")
+        except Exception as e:
+            print(f"[{nombre}] ERROR (intento {intento}): {type(e).__name__}: {e}")
+        if intento == 1:
+            print(f"[{nombre}] se reintenta en {PAUSA_REINTENTO_S} s")
+            await asyncio.sleep(PAUSA_REINTENTO_S)
+    return 0
 
 
 async def main() -> int:
     print("=== EasyCompra Sync ===")
     counts = {
-        "Carrefour": await _seguro("Carrefour", sync_carrefour()),
-        "Lidl": await _seguro("Lidl", sync_lidl()),
+        "Carrefour": await _seguro("Carrefour", sync_carrefour),
+        "Lidl": await _seguro("Lidl", sync_lidl),
         # Mercadona es una API JSON sincrona: va en un hilo aparte.
-        "Mercadona": await _seguro("Mercadona", sync_mercadona),
+        "Mercadona": await _seguro("Mercadona", lambda: asyncio.to_thread(sync_mercadona)),
         # Dia, como Carrefour, necesita navegador por Akamai.
-        "Dia": await _seguro("Dia", sync_dia()),
+        "Dia": await _seguro("Dia", sync_dia),
         # Alimerka: su tienda online, sin navegador (catalogo por secciones).
-        "Alimerka": await _seguro("Alimerka", sync_alimerka()),
+        "Alimerka": await _seguro("Alimerka", sync_alimerka),
         # Froiz no va aqui: Cloudflare bloquea las IP de GitHub (403 tambien
         # con navegador). Lo descarga la app directamente desde el movil.
     }
