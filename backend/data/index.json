@@ -1,19 +1,19 @@
 {
-  "updated_at": "2026-10-09T12:49:12+00:00",
+  "updated_at": "2026-10-11T12:22:09+00:00",
   "supermarkets": {
     "alimerka": {
       "file": "alimerka.json",
-      "count": 4395,
+      "count": 4382,
       "fresh": true
     },
     "carrefour": {
       "file": "carrefour.json",
-      "count": 1392,
+      "count": 1390,
       "fresh": true
     },
     "dia": {
       "file": "dia.json",
-      "count": 764,
+      "count": 759,
       "fresh": true
     },
     "lidl": {
@@ -27,5 +27,5 @@
       "fresh": true
     }
   },
-  "total": 9647
+  "total": 9627
 }
