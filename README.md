@@ -238,7 +238,7 @@ Al abrir la app, en **Ajustes** (icono de engranaje) se elige el origen de los d
 - **Internet** (por defecto): descarga los JSON del repositorio público. No requiere
   nada encendido en casa.
 - **Servidor propio**: la dirección del backend en la red local, por ejemplo
-  `http://192.168.1.100:8123`.
+  `http://<IP-de-tu-PC>:8123`.
 
 La elección y la dirección quedan guardadas en `SharedPreferences`, y la última
 descarga correcta se cachea en disco para poder abrir la app sin conexión.
@@ -295,8 +295,6 @@ campos en el backend ya no puede tumbar la app.
   de escritura, guardada como secret `DATOS_DEPLOY_KEY` y limitada a ese único
   repositorio. No hay tokens ni claves en el código; `.env` y `*.db` están en
   `.gitignore`.
-- La IP privada que aparece como valor por defecto (`192.168.1.100`) es una dirección
-  de red local (RFC1918): no es accesible desde internet y no identifica nada.
 
 ## Futuras mejoras
 

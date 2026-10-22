@@ -71,6 +71,7 @@ data class UiState(
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
+        /** Solo un ejemplo: cada uno escribe en Ajustes la IP de su PC. */
         const val URL_POR_DEFECTO = "http://192.168.1.100:8123"
         val SUPERMERCADOS = listOf(null, "Mercadona", "Dia", "Carrefour", "Lidl", "Alimerka", "Froiz")
 
