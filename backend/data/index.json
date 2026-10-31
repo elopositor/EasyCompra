@@ -1,31 +1,31 @@
 {
-  "updated_at": "2026-10-30T12:24:55+00:00",
+  "updated_at": "2026-10-31T11:55:46+00:00",
   "supermarkets": {
     "alimerka": {
       "file": "alimerka.json",
-      "count": 4394,
+      "count": 4387,
       "fresh": true
     },
     "carrefour": {
       "file": "carrefour.json",
-      "count": 1395,
+      "count": 1402,
       "fresh": true
     },
     "dia": {
       "file": "dia.json",
-      "count": 754,
+      "count": 751,
       "fresh": true
     },
     "lidl": {
       "file": "lidl.json",
-      "count": 312,
+      "count": 316,
       "fresh": true
     },
     "mercadona": {
       "file": "mercadona.json",
-      "count": 2915,
+      "count": 2913,
       "fresh": true
     }
   },
-  "total": 9770
+  "total": 9769
 }
